@@ -316,7 +316,7 @@ export function TournamentDialog({
                   <div className="space-y-4">
                     <Button
                       onClick={handlePurchaseInsurance}
-                      className="w-full"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                       disabled={isPurchasingInsurance || !accountAddress}
                     >
                       {isPurchasingInsurance ? (
