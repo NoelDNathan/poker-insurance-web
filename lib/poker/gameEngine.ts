@@ -73,10 +73,6 @@ export function startNewHand(gameState: GameState): GameState {
   // Post blinds
   const smallBlindIndex = (newState.dealerPosition + 1) % newState.players.length;
   const bigBlindIndex = (newState.dealerPosition + 2) % newState.players.length;
-  
-  // Set round start index (first player to act after big blind)
-  newState.roundStartIndex = (bigBlindIndex + 1) % newState.players.length;
-  newState.hasActedThisRound = false; // Blinds don't count as "acting" in the betting round
 
   const smallBlindPlayer = newState.players[smallBlindIndex];
   const bigBlindPlayer = newState.players[bigBlindIndex];
@@ -89,11 +85,28 @@ export function startNewHand(gameState: GameState): GameState {
   bigBlindPlayer.balance -= bigBlindAmount;
   bigBlindPlayer.currentBet = bigBlindAmount;
 
+  // Check if players went all-in with blinds
+  if (smallBlindPlayer.balance === 0) {
+    smallBlindPlayer.isAllIn = true;
+  }
+  if (bigBlindPlayer.balance === 0) {
+    bigBlindPlayer.isAllIn = true;
+  }
+
   newState.pot = smallBlindAmount + bigBlindAmount;
   newState.currentBet = bigBlindAmount;
 
-  // Start with player after big blind
+  // Reset counter: number of active players (not all-in) that need to act
+  newState.playersToActInRound = newState.players.filter(
+    (p) => !p.folded && p.inGame && !p.isAllIn
+  ).length;
+
+  // Start with player after big blind (first active player)
   newState.currentTurnIndex = (bigBlindIndex + 1) % newState.players.length;
+  const nextActive = getNextActivePlayerIndexFromPosition(newState, bigBlindIndex);
+  if (nextActive >= 0) {
+    newState.currentTurnIndex = nextActive;
+  }
 
   return newState;
 }
@@ -117,27 +130,27 @@ export function processPlayerAction(
     case "fold":
       player.folded = true;
       player.inGame = false;
-      newState.hasActedThisRound = true;
+      newState.playersToActInRound--;
       break;
 
     case "check":
       if (newBet > 0) {
         throw new Error("Cannot check when there is a bet");
       }
-      newState.hasActedThisRound = true;
+      newState.playersToActInRound--;
       break;
 
     case "call":
       if (newBet === 0) {
         // Actually a check
-        newState.hasActedThisRound = true;
+        newState.playersToActInRound--;
         break;
       }
       const callAmount = Math.min(newBet, player.balance);
       player.balance -= callAmount;
       player.currentBet += callAmount;
       newState.pot += callAmount;
-      newState.hasActedThisRound = true;
+      newState.playersToActInRound--;
       if (player.balance === 0) {
         player.isAllIn = true;
       }
@@ -153,7 +166,12 @@ export function processPlayerAction(
       player.currentBet = raiseAmount;
       newState.pot += raiseCallAmount;
       newState.currentBet = raiseAmount;
-      newState.hasActedThisRound = true;
+      // Reset counter when someone raises - all active players need to act again
+      newState.playersToActInRound = newState.players.filter(
+        (p) => !p.folded && p.inGame && !p.isAllIn
+      ).length;
+      // Decrement because the raiser just acted
+      newState.playersToActInRound--;
       if (player.balance === 0) {
         player.isAllIn = true;
       }
@@ -183,9 +201,16 @@ export function advanceToNextRound(gameState: GameState): GameState {
     newState.players.forEach((p) => {
       p.currentBet = 0;
     });
+    // Reset counter: number of active players (not all-in) that need to act
+    newState.playersToActInRound = newState.players.filter(
+      (p) => !p.folded && p.inGame && !p.isAllIn
+    ).length;
+    // Start from player after dealer, but find the first active player
     newState.currentTurnIndex = (newState.dealerPosition + 1) % newState.players.length;
-    newState.roundStartIndex = newState.currentTurnIndex;
-    newState.hasActedThisRound = false;
+    const nextActive = getNextActivePlayerIndexFromPosition(newState, newState.dealerPosition);
+    if (nextActive >= 0) {
+      newState.currentTurnIndex = nextActive;
+    }
   } else if (newState.currentRound === "flop") {
     newState.currentRound = "turn";
     if (newState.communityCards.length < 4) {
@@ -204,9 +229,16 @@ export function advanceToNextRound(gameState: GameState): GameState {
     newState.players.forEach((p) => {
       p.currentBet = 0;
     });
+    // Reset counter: number of active players (not all-in) that need to act
+    newState.playersToActInRound = newState.players.filter(
+      (p) => !p.folded && p.inGame && !p.isAllIn
+    ).length;
+    // Start from player after dealer, but find the first active player
     newState.currentTurnIndex = (newState.dealerPosition + 1) % newState.players.length;
-    newState.roundStartIndex = newState.currentTurnIndex;
-    newState.hasActedThisRound = false;
+    const nextActive = getNextActivePlayerIndexFromPosition(newState, newState.dealerPosition);
+    if (nextActive >= 0) {
+      newState.currentTurnIndex = nextActive;
+    }
   } else if (newState.currentRound === "turn") {
     newState.currentRound = "river";
     if (newState.communityCards.length < 5) {
@@ -225,9 +257,16 @@ export function advanceToNextRound(gameState: GameState): GameState {
     newState.players.forEach((p) => {
       p.currentBet = 0;
     });
+    // Reset counter: number of active players (not all-in) that need to act
+    newState.playersToActInRound = newState.players.filter(
+      (p) => !p.folded && p.inGame && !p.isAllIn
+    ).length;
+    // Start from player after dealer, but find the first active player
     newState.currentTurnIndex = (newState.dealerPosition + 1) % newState.players.length;
-    newState.roundStartIndex = newState.currentTurnIndex;
-    newState.hasActedThisRound = false;
+    const nextActive = getNextActivePlayerIndexFromPosition(newState, newState.dealerPosition);
+    if (nextActive >= 0) {
+      newState.currentTurnIndex = nextActive;
+    }
   } else if (newState.currentRound === "river") {
     newState.currentRound = "showdown";
     newState = determineWinners(newState);
@@ -280,42 +319,12 @@ export function isBettingRoundComplete(gameState: GameState): boolean {
     return true;
   }
 
-  // Check if all active players have the same bet
-  const allBetsEqual = activePlayers.every(
-    (p) => p.currentBet === gameState.currentBet
-  );
-
-  if (!allBetsEqual) {
-    return false;
-  }
-
-  // If all bets are equal, check if we've completed a full rotation
-  // A round is complete when we've cycled back to or past the roundStartIndex
-  const roundStart = gameState.roundStartIndex;
-  const currentTurn = gameState.currentTurnIndex;
-  
-  // If there's a bet and all bets are equal, everyone has called - round is complete
-  if (gameState.currentBet > 0 && allBetsEqual) {
-    return true;
-  }
-  
-  // For check rounds (currentBet === 0), we need to have cycled back to start
-  // But we need to ensure we've gone through all players at least once
-  // Check if we've wrapped around: if currentTurn < roundStart, we've completed a cycle
-  if (currentTurn < roundStart) {
-    return true;
-  }
-  
-  // If we're back at the start AND someone has acted, the round is complete
-  if (currentTurn === roundStart && gameState.currentBet === 0 && gameState.hasActedThisRound) {
-    return true;
-  }
-  
-  return false;
+  // Round is complete when counter reaches 0 (all active players have acted)
+  return gameState.playersToActInRound <= 0;
 }
 
-export function getNextActivePlayerIndex(gameState: GameState): number {
-  let currentIndex = gameState.currentTurnIndex;
+// Helper function to find next active player from a given position
+function getNextActivePlayerIndexFromPosition(gameState: GameState, startIndex: number): number {
   const activePlayers = gameState.players.filter(
     (p) => !p.folded && p.inGame && !p.isAllIn
   );
@@ -324,6 +333,7 @@ export function getNextActivePlayerIndex(gameState: GameState): number {
     return -1;
   }
 
+  let currentIndex = startIndex;
   for (let i = 0; i < gameState.players.length; i++) {
     currentIndex = (currentIndex + 1) % gameState.players.length;
     const player = gameState.players[currentIndex];
@@ -333,5 +343,9 @@ export function getNextActivePlayerIndex(gameState: GameState): number {
   }
 
   return -1;
+}
+
+export function getNextActivePlayerIndex(gameState: GameState): number {
+  return getNextActivePlayerIndexFromPosition(gameState, gameState.currentTurnIndex);
 }
 

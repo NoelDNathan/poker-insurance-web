@@ -28,8 +28,7 @@ export interface GameState {
   firstHandPlayed: boolean;
   isHandComplete: boolean;
   winners: number[];
-  roundStartIndex: number; // Index of the first player to act in the current round
-  hasActedThisRound: boolean; // Whether at least one player has acted in the current round
+  playersToActInRound: number; // Counter: number of active players (not all-in) that need to act
 }
 
 export const createInitialGameState = (
@@ -112,8 +111,7 @@ export const createInitialGameState = (
     firstHandPlayed: false,
     isHandComplete: false,
     winners: [],
-    roundStartIndex: 0,
-    hasActedThisRound: false,
+    playersToActInRound: 0,
   };
 };
 
