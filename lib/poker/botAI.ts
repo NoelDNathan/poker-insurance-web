@@ -1,5 +1,4 @@
 import { ICard } from "./types";
-import { evaluateHand } from "./handEvaluation";
 
 export type BotAction = "fold" | "check" | "call" | "raise";
 
@@ -17,61 +16,32 @@ export function makeBotDecision(
   botBalance: number
 ): BotDecision {
   const newBet = currentBet - botCurrentBet;
+  const random = Math.random();
+  const raiseProbability = 0.1; // 5% chance to raise
 
-  // Bot 1 always calls/checks
-  if (botIndex === 1) {
-    if (newBet === 0) {
-      return { action: "check" };
+  // All bots always call/check - never fold
+  // With 5% probability, bots can raise
+  if (random < raiseProbability && botBalance > 0) {
+    // Calculate raise amount: current bet + 1.5x to 3x the new bet (or available balance)
+    const minRaise = currentBet + Math.max(newBet || 10, 10);
+    const maxRaise = currentBet + Math.floor((newBet || 10) * 3);
+    const availableForRaise = botBalance + botCurrentBet;
+    const raiseAmount = Math.min(
+      Math.floor(minRaise + (maxRaise - minRaise) * Math.random()),
+      availableForRaise
+    );
+    
+    if (raiseAmount > currentBet) {
+      return { action: "raise", raiseAmount };
     }
-    return { action: "call" };
   }
 
-  // Bots 2-4 use probability formula with hand strength consideration
+  // Default behavior: check if no bet, call if there's a bet
   if (newBet === 0) {
     return { action: "check" };
   }
 
-  if (newBet > 0 && botBalance > 0) {
-    // Evaluate hand strength
-    const handEvaluation = evaluateHand(hand, communityCards);
-    // Convert BigInt score to Number for calculations
-    const handStrength = Number(handEvaluation.score);
-    
-    // Base probability from bet/balance ratio (increased from 0.75 to 1.2 for more calls)
-    const baseProbability = 1.2 * (newBet / botBalance);
-    
-    // Hand strength modifier: stronger hands are more likely to call/raise
-    // Hand scores range from ~0 (high card) to ~90000000000000 (royal flush)
-    // Normalize to 0-1 range and add bonus (divide by a large number to normalize)
-    const handStrengthBonus = Math.min(handStrength / 100000000000000, 0.4); // Max 40% bonus
-    
-    // Minimum call probability (30%) - bots will call at least 30% of the time
-    const minCallProbability = 0.3;
-    
-    // Calculate final probability
-    const probability = Math.min(baseProbability + handStrengthBonus, 0.95); // Cap at 95%
-    const finalProbability = Math.max(probability, minCallProbability);
-    
-    const random = Math.random();
-
-    if (random < finalProbability) {
-      // Sometimes raise with strong hands (check if score is high enough)
-      // Using category as a simpler check for strong hands
-      if (handEvaluation.category >= 5 && random < 0.3 && botBalance > newBet * 2) {
-        const raiseAmount = currentBet + Math.floor(newBet * (1.5 + Math.random()));
-        return { action: "raise", raiseAmount };
-      }
-      return { action: "call" };
-    } else {
-      return { action: "fold" };
-    }
-  }
-
-  // If bot can't afford to call, fold
-  if (botBalance < newBet) {
-    return { action: "fold" };
-  }
-
-  return { action: "fold" };
+  // Always call (will go all-in if bot can't afford full call)
+  return { action: "call" };
 }
 
