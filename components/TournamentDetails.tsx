@@ -43,6 +43,13 @@ export interface Tournament {
   guaranteedPrizePool?: number;
 }
 
+// Helper function to get future dates
+const getFutureDate = (daysFromNow: number): string => {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromNow);
+  return date.toISOString().split("T")[0];
+};
+
 const initialTournaments: Tournament[] = [
   {
     id: "tournament-001",
@@ -60,7 +67,7 @@ const initialTournaments: Tournament[] = [
   {
     id: "tournament-002",
     name: "Spring Series Main Event",
-    date: "2024-03-20",
+    date: getFutureDate(7), // 7 days from now
     status: "upcoming",
     isRegistered: false,
     tournamentUrl: "http://localhost:8000/tournament_example.html",
@@ -73,7 +80,7 @@ const initialTournaments: Tournament[] = [
   {
     id: "tournament-003",
     name: "Summer High Roller",
-    date: "2024-06-10",
+    date: getFutureDate(14), // 14 days from now
     status: "upcoming",
     isRegistered: true,
     tournamentUrl: "http://localhost:8000/tournament_example.html",
@@ -99,7 +106,7 @@ const initialTournaments: Tournament[] = [
   {
     id: "tournament-005",
     name: "New Year's Tournament",
-    date: "2024-12-31",
+    date: getFutureDate(30), // 30 days from now
     status: "upcoming",
     isRegistered: false,
     tournamentUrl: "http://localhost:8000/tournament_example.html",
@@ -125,7 +132,7 @@ const initialTournaments: Tournament[] = [
   {
     id: "tournament-007",
     name: "April Showers",
-    date: "2024-04-22",
+    date: getFutureDate(21), // 21 days from now
     status: "upcoming",
     isRegistered: false,
     tournamentUrl: "http://localhost:8000/tournament_example.html",
@@ -138,7 +145,7 @@ const initialTournaments: Tournament[] = [
   {
     id: "tournament-008",
     name: "May Madness",
-    date: "2024-05-15",
+    date: getFutureDate(45), // 45 days from now
     status: "upcoming",
     isRegistered: true,
     tournamentUrl: "http://localhost:8000/tournament_example.html",
@@ -164,7 +171,7 @@ const initialTournaments: Tournament[] = [
   {
     id: "tournament-010",
     name: "October Open",
-    date: "2024-10-15",
+    date: getFutureDate(60), // 60 days from now
     status: "upcoming",
     isRegistered: false,
     tournamentUrl: "http://localhost:8000/tournament_example.html",
