@@ -55,8 +55,18 @@ export const Table: React.FC<TableProps> = ({
 
           <div className="absolute top-[70%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
             <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white px-6 py-3 rounded-xl shadow-lg border border-amber-500">
-              <div className="text-2xl font-bold text-center"> ${pot}</div>
-              <div className="text-sm text-amber-200 text-center">Total Pot</div>
+              <div className="flex items-center justify-center gap-6">
+                <div>
+                  <div className="text-2xl font-bold text-center"> ${pot}</div>
+                  <div className="text-sm text-amber-200 text-center">Total Pot</div>
+                </div>
+                {lastBetAmount > 0 && (
+                  <div className="border-l border-amber-400 pl-6">
+                    <div className="text-2xl font-bold text-center"> ${lastBetAmount}</div>
+                    <div className="text-sm text-amber-200 text-center">Current Bet</div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

@@ -34,13 +34,6 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
     }
   };
 
-  const handleQuickRaise = (multiplier: number) => {
-    const amount = currentBet * multiplier;
-    if (amount <= playerBalance + playerBet) {
-      onRaise(amount);
-    }
-  };
-
   const callAmount = currentBet - playerBet;
   const canCheck = currentBet === playerBet;
   const canCall = currentBet > playerBet && playerBalance >= callAmount;
@@ -122,40 +115,7 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
             </div>
           )}
         </div>
-        {canRaise && showRaiseInput && (
-          <div className="grid grid-cols-4 gap-2">
-            <button
-              onClick={() => handleQuickRaise(1.25)}
-              disabled={isLoading}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded text-sm"
-            >
-              1.25x
-            </button>
-            <button
-              onClick={() => handleQuickRaise(1.5)}
-              disabled={isLoading}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded text-sm"
-            >
-              1.5x
-            </button>
-            <button
-              onClick={() => handleQuickRaise(2)}
-              disabled={isLoading}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded text-sm"
-            >
-              2x
-            </button>
-            <button
-              onClick={() => handleQuickRaise(3)}
-              disabled={isLoading}
-              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-2 py-1 rounded text-sm"
-            >
-              3x
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
 };
-

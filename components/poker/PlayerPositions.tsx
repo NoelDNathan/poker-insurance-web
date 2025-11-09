@@ -128,11 +128,7 @@ export const PlayerPositions: React.FC<PlayerPositionsProps> = ({
                       ALL IN
                     </p>
                   )}
-                  {player.isHuman && humanPlayerHand && (
-                    <p className="text-amber-300 font-semibold text-xs mt-2 bg-amber-900 px-2 py-1 rounded">
-                      {humanPlayerHand}
-                    </p>
-                  )}
+                 
                 </div>
               </div>
             </div>
