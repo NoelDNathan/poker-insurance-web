@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   XCircle,
   Coins,
+  Play,
 } from "lucide-react";
 import { TournamentDialog } from "./TournamentDialog";
 
@@ -48,6 +49,11 @@ const getFutureDate = (daysFromNow: number): string => {
   const date = new Date();
   date.setDate(date.getDate() + daysFromNow);
   return date.toISOString().split("T")[0];
+};
+
+// Helper function to get today's date
+const getTodayDate = (): string => {
+  return new Date().toISOString().split("T")[0];
 };
 
 const initialTournaments: Tournament[] = [
@@ -178,6 +184,45 @@ const initialTournaments: Tournament[] = [
     buyIn: 250,
     premium: 25,
     payout: 125,
+    format: "No-Limit Hold'em",
+    totalPlayers: 0,
+  },
+  {
+    id: "tournament-011",
+    name: "Daily Tournament",
+    date: getTodayDate(), // Today
+    status: "upcoming",
+    isRegistered: false,
+    tournamentUrl: "http://localhost:8000/tournament_example.html",
+    buyIn: 50,
+    premium: 5,
+    payout: 25,
+    format: "No-Limit Hold'em",
+    totalPlayers: 0,
+  },
+  {
+    id: "tournament-012",
+    name: "Evening Showdown",
+    date: getTodayDate(), // Today
+    status: "upcoming",
+    isRegistered: true,
+    tournamentUrl: "http://localhost:8000/tournament_example.html",
+    buyIn: 100,
+    premium: 10,
+    payout: 50,
+    format: "No-Limit Hold'em",
+    totalPlayers: 0,
+  },
+  {
+    id: "tournament-013",
+    name: "Quick Fire Tournament",
+    date: getTodayDate(), // Today
+    status: "upcoming",
+    isRegistered: false,
+    tournamentUrl: "http://localhost:8000/tournament_example.html",
+    buyIn: 75,
+    premium: 7.5,
+    payout: 37.5,
     format: "No-Limit Hold'em",
     totalPlayers: 0,
   },
@@ -445,6 +490,19 @@ export function TournamentDetails() {
     });
   };
 
+  // Check if tournament is today
+  const isTournamentToday = (tournament: Tournament): boolean => {
+    const today = getTodayDate();
+    return tournament.date === today;
+  };
+
+  // Handle play button click (placeholder for future functionality)
+  const handlePlayTournament = (e: React.MouseEvent, tournament: Tournament) => {
+    e.stopPropagation(); // Prevent opening the dialog
+    // TODO: Implement tournament play functionality
+    console.log("Play tournament:", tournament.id);
+  };
+
   const calculateGuaranteedPrizePool = (tournament: Tournament): number => {
     // If guaranteed prize pool is explicitly set, use it
     if (tournament.guaranteedPrizePool !== undefined) {
@@ -686,6 +744,24 @@ export function TournamentDetails() {
                                 Claimable
                               </Badge>
                             )}
+                            {isTournamentToday(tournament) &&
+                              tournament.status === "upcoming" &&
+                              tournament.isRegistered && (
+                                <Badge variant="default" className="bg-blue-600 hover:bg-blue-700">
+                                  <Play className="h-3 w-3 mr-1" />
+                                  Play Today
+                                </Badge>
+                              )}
+                            {isTournamentToday(tournament) &&
+                              tournament.status === "upcoming" &&
+                              !tournament.isRegistered && (
+                                <Badge
+                                  variant="outline"
+                                  className="border-orange-500 text-orange-600"
+                                >
+                                  Register to Play
+                                </Badge>
+                              )}
                           </div>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <div className="flex items-center gap-1">
@@ -718,6 +794,31 @@ export function TournamentDetails() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
+                          {isTournamentToday(tournament) &&
+                            tournament.status === "upcoming" &&
+                            tournament.isRegistered && (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={(e) => handlePlayTournament(e, tournament)}
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                              >
+                                <Play className="h-4 w-4 mr-2" />
+                                Play
+                              </Button>
+                            )}
+                          {isTournamentToday(tournament) &&
+                            tournament.status === "upcoming" &&
+                            !tournament.isRegistered && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleTournamentClick(tournament)}
+                                className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                              >
+                                Register to Play
+                              </Button>
+                            )}
                           {claimablePolicy && (
                             <Button
                               variant="default"

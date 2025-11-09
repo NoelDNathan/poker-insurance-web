@@ -16,7 +16,16 @@ import { Badge } from "@/components/ui/badge";
 import { PokerCoolerInsurance } from "@/lib/PokerCoolerInsurance";
 import { useAccount } from "@/lib/AccountContext";
 import { Tournament } from "./TournamentDetails";
-import { Loader2, Calendar, Trophy, Shield, Users, CheckCircle2, XCircle } from "lucide-react";
+import {
+  Loader2,
+  Calendar,
+  Trophy,
+  Shield,
+  Users,
+  CheckCircle2,
+  XCircle,
+  Play,
+} from "lucide-react";
 
 interface TournamentDialogProps {
   tournament: Tournament;
@@ -52,6 +61,18 @@ export function TournamentDialog({
   const getAutoRegistrationDate = (): string => {
     // Use current date in YYYY-MM-DD format
     return new Date().toISOString().split("T")[0];
+  };
+
+  // Check if tournament is today
+  const isTournamentToday = (): boolean => {
+    const today = new Date().toISOString().split("T")[0];
+    return tournament.date === today;
+  };
+
+  // Handle play button click (placeholder for future functionality)
+  const handlePlayTournament = () => {
+    // TODO: Implement tournament play functionality
+    console.log("Play tournament:", tournament.id);
   };
 
   const formatDate = (dateString: string) => {
@@ -257,6 +278,38 @@ export function TournamentDialog({
                 </div>
               </div>
             </div>
+
+            {/* Play Section - Only for tournaments today */}
+            {tournament.status === "upcoming" && isTournamentToday() && (
+              <div className="space-y-4 border-t pt-6">
+                {tournament.isRegistered ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-lg mb-2">Play Tournament</h3>
+                      <p className="text-sm text-muted-foreground">
+                        This tournament is available to play today. Click Play to start.
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handlePlayTournament}
+                      className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <Play className="mr-2 h-4 w-4" />
+                      Play
+                    </Button>
+                  </div>
+                ) : (
+                  <Alert>
+                    <Shield className="h-4 w-4" />
+                    <AlertTitle>Registration Required</AlertTitle>
+                    <AlertDescription>
+                      You need to register for this tournament before you can play. Register now to
+                      join today&apos;s tournament!
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
 
             {/* Registration Section */}
             {tournament.status === "upcoming" && (
