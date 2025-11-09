@@ -119,9 +119,22 @@ export function ClaimForm() {
         addBalance(Number(policy.payout_amount));
       }
       
+      // Update policy status in local state immediately
+      setPolicies(prevPolicies => {
+        const updatedPolicies = { ...prevPolicies };
+        if (updatedPolicies[policyIdToClaim]) {
+          updatedPolicies[policyIdToClaim] = {
+            ...updatedPolicies[policyIdToClaim],
+            has_claimed: true,
+            claim_resolved: true,
+          };
+        }
+        return updatedPolicies;
+      });
+      
       setSuccess(`Claim filed successfully! You received ${policy ? Number(policy.payout_amount) : 0} tokens. Transaction: ${txHash}`);
       
-      // Reload policies to update status
+      // Reload policies to get latest state from contract
       await loadPolicies();
     } catch (err: any) {
       setError(err.message || "Failed to file claim");

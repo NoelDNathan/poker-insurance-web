@@ -16,9 +16,11 @@ interface TournamentDialogProps {
   tournament: Tournament;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onRegistered?: (tournamentId: string) => void;
+  onInsurancePurchased?: (tournamentId: string) => void;
 }
 
-export function TournamentDialog({ tournament, open, onOpenChange }: TournamentDialogProps) {
+export function TournamentDialog({ tournament, open, onOpenChange, onRegistered, onInsurancePurchased }: TournamentDialogProps) {
   const { account, accountAddress, subtractBalance } = useAccount();
   const [playerId, setPlayerId] = useState("");
   const [registrationDate, setRegistrationDate] = useState("");
@@ -56,7 +58,10 @@ export function TournamentDialog({ tournament, open, onOpenChange }: TournamentD
       // Subtract buy-in from balance
       subtractBalance(tournament.buyIn);
       setSuccess(`Successfully registered for the tournament! ${tournament.buyIn} tokens deducted.`);
-      // Update tournament registration status would happen here
+      // Notify parent component to update tournament registration status
+      if (onRegistered) {
+        onRegistered(tournament.id);
+      }
     } catch (err: any) {
       setError(err.message || "Failed to register for tournament");
     } finally {
@@ -92,6 +97,10 @@ export function TournamentDialog({ tournament, open, onOpenChange }: TournamentD
       setSuccess(`Insurance purchased successfully! ${tournament.premium} tokens deducted. Transaction: ${txHash}`);
       setPlayerId("");
       setRegistrationDate("");
+      // Notify parent component to reload policies
+      if (onInsurancePurchased) {
+        onInsurancePurchased(tournament.id);
+      }
     } catch (err: any) {
       setError(err.message || "Failed to purchase insurance");
     } finally {

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PokerCoolerInsurance, type InsurancePolicy } from "@/lib/PokerCoolerInsurance";
+import type { Address } from "viem";
 import { useAccount } from "@/lib/AccountContext";
 import { Loader2, Calendar, Users, Trophy, Shield, CheckCircle2, XCircle } from "lucide-react";
 import { TournamentDialog } from "./TournamentDialog";
@@ -25,7 +26,7 @@ export interface Tournament {
   totalPlayers: number;
 }
 
-const mockTournaments: Tournament[] = [
+const initialTournaments: Tournament[] = [
   {
     id: "tournament-001",
     name: "Winter Championship 2024",
@@ -162,58 +163,68 @@ export function TournamentDetails() {
   const { account, accountAddress, addBalance } = useAccount();
   const [tournamentUrl, setTournamentUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [tournamentInfo, setTournamentInfo] = useState<any>(null);
+  const [tournamentInfo, setTournamentInfo] = useState<{
+    tournament_buy_in: bigint;
+    insurance_premium: bigint;
+    payout_amount: bigint;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [policies, setPolicies] = useState<Record<string, InsurancePolicy>>({});
-  const [loadingPolicies, setLoadingPolicies] = useState(false);
+  const [, setLoadingPolicies] = useState(false);
   const [claimingPolicyId, setClaimingPolicyId] = useState<string | null>(null);
   const [claimSuccess, setClaimSuccess] = useState<string | null>(null);
+  const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments);
 
   const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
   const studioUrl = process.env.NEXT_PUBLIC_STUDIO_URL;
 
-  const getDefaultMockPolicies = useCallback((playerAddress: string | null): Record<string, InsurancePolicy> => {
-    // Policy 1: Tournament that finished, lost by cooler, can claim
-    const finishedTournament = mockTournaments.find(t => t.id === "tournament-001");
-    const policy1: InsurancePolicy = {
-      id: "policy-001",
-      player_address: (playerAddress || "0x0000000000000000000000000000000000000000") as any,
-      tournament_id: "tournament-001",
-      tournament_url: finishedTournament?.tournamentUrl || "http://localhost:8000/tournament_example.html",
-      player_id: "player123",
-      tournament_buy_in: BigInt(finishedTournament?.buyIn || 100),
-      premium_paid: BigInt(finishedTournament?.premium || 10),
-      has_claimed: false,
-      claim_resolved: false,
-      is_valid_cooler: true, // Lost by cooler, can claim
-      payout_amount: BigInt(finishedTournament?.payout || 50),
-      registration_date: "2024-01-10",
-    };
+  const getDefaultMockPolicies = useCallback(
+    (playerAddress: string | null): Record<string, InsurancePolicy> => {
+      // Policy 1: Tournament that finished, lost by cooler, can claim
+      const finishedTournament = tournaments.find((t) => t.id === "tournament-001");
+      const policy1: InsurancePolicy = {
+        id: "policy-001",
+        player_address: (playerAddress || "0x0000000000000000000000000000000000000000") as Address,
+        tournament_id: "tournament-001",
+        tournament_url:
+          finishedTournament?.tournamentUrl || "http://localhost:8000/tournament_example.html",
+        player_id: "player123",
+        tournament_buy_in: BigInt(finishedTournament?.buyIn || 100),
+        premium_paid: BigInt(finishedTournament?.premium || 10),
+        has_claimed: false,
+        claim_resolved: false,
+        is_valid_cooler: true, // Lost by cooler, can claim
+        payout_amount: BigInt(finishedTournament?.payout || 50),
+        registration_date: "2024-01-10",
+      };
 
-    // Policy 2: Upcoming tournament, insurance active but tournament not played yet
-    const upcomingTournament = mockTournaments.find(t => t.id === "tournament-003");
-    const policy2: InsurancePolicy = {
-      id: "policy-002",
-      player_address: (playerAddress || "0x0000000000000000000000000000000000000000") as any,
-      tournament_id: "tournament-003",
-      tournament_url: upcomingTournament?.tournamentUrl || "http://localhost:8000/tournament_example.html",
-      player_id: "player123",
-      tournament_buy_in: BigInt(upcomingTournament?.buyIn || 500),
-      premium_paid: BigInt(upcomingTournament?.premium || 50),
-      has_claimed: false,
-      claim_resolved: false,
-      is_valid_cooler: false, // Tournament not played yet
-      payout_amount: BigInt(upcomingTournament?.payout || 250),
-      registration_date: "2024-05-01",
-    };
+      // Policy 2: Upcoming tournament, insurance active but tournament not played yet
+      const upcomingTournament = tournaments.find((t) => t.id === "tournament-003");
+      const policy2: InsurancePolicy = {
+        id: "policy-002",
+        player_address: (playerAddress || "0x0000000000000000000000000000000000000000") as Address,
+        tournament_id: "tournament-003",
+        tournament_url:
+          upcomingTournament?.tournamentUrl || "http://localhost:8000/tournament_example.html",
+        player_id: "player123",
+        tournament_buy_in: BigInt(upcomingTournament?.buyIn || 500),
+        premium_paid: BigInt(upcomingTournament?.premium || 50),
+        has_claimed: false,
+        claim_resolved: false,
+        is_valid_cooler: false, // Tournament not played yet
+        payout_amount: BigInt(upcomingTournament?.payout || 250),
+        registration_date: "2024-05-01",
+      };
 
-    return {
-      "policy-001": policy1,
-      "policy-002": policy2,
-    };
-  }, []);
+      return {
+        "policy-001": policy1,
+        "policy-002": policy2,
+      };
+    },
+    [tournaments]
+  );
 
   const loadPolicies = useCallback(async () => {
     setLoadingPolicies(true);
@@ -222,7 +233,7 @@ export function TournamentDetails() {
         // Try to load real policies
         const contract = new PokerCoolerInsurance(contractAddress, account, studioUrl);
         const playerPolicies = await contract.getPlayerPolicies(accountAddress);
-        
+
         // If there are real policies, use them; otherwise use mock policies
         if (Object.keys(playerPolicies).length > 0) {
           setPolicies(playerPolicies);
@@ -234,7 +245,7 @@ export function TournamentDetails() {
         // No account connected, use default mock policies for demo
         setPolicies(getDefaultMockPolicies(null));
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load policies:", err);
       // On error, use default mock policies
       setPolicies(getDefaultMockPolicies(accountAddress));
@@ -247,9 +258,18 @@ export function TournamentDetails() {
     loadPolicies();
   }, [loadPolicies]);
 
+  // Function to update tournament registration status
+  const updateTournamentRegistration = (tournamentId: string, isRegistered: boolean) => {
+    setTournaments((prevTournaments) =>
+      prevTournaments.map((tournament) =>
+        tournament.id === tournamentId ? { ...tournament, isRegistered } : tournament
+      )
+    );
+  };
+
   const hasInsuranceForTournament = (tournament: Tournament): boolean => {
     if (!policies || Object.keys(policies).length === 0) return false;
-    
+
     // Only check by tournament_id since all tournaments share the same URL
     return Object.values(policies).some((policy) => {
       return policy.tournament_id === tournament.id;
@@ -258,21 +278,19 @@ export function TournamentDetails() {
 
   const getClaimablePolicyForTournament = (tournament: Tournament): InsurancePolicy | null => {
     if (!policies || Object.keys(policies).length === 0) return null;
-    
+
     const policy = Object.values(policies).find((policy) => {
       return (
-        policy.tournament_id === tournament.id &&
-        policy.is_valid_cooler &&
-        !policy.has_claimed
+        policy.tournament_id === tournament.id && policy.is_valid_cooler && !policy.has_claimed
       );
     });
-    
+
     return policy || null;
   };
 
   const handleClaimInsurance = async (e: React.MouseEvent, tournament: Tournament) => {
     e.stopPropagation(); // Prevent opening the dialog
-    
+
     if (!account) {
       setError("Please connect an account first");
       return;
@@ -290,23 +308,36 @@ export function TournamentDetails() {
 
     try {
       const contract = new PokerCoolerInsurance(contractAddress, account, studioUrl);
-      const txHash = await contract.fileClaim(policy.id);
-      
+      await contract.fileClaim(policy.id);
+
       // Add payout to balance
       const payoutAmount = Number(policy.payout_amount);
       addBalance(payoutAmount);
-      
-      // Reload policies to update status
+
+      // Update policy status in local state immediately
+      setPolicies((prevPolicies) => {
+        const updatedPolicies = { ...prevPolicies };
+        if (updatedPolicies[policy.id]) {
+          updatedPolicies[policy.id] = {
+            ...updatedPolicies[policy.id],
+            has_claimed: true,
+            claim_resolved: true,
+          };
+        }
+        return updatedPolicies;
+      });
+
+      // Reload policies to get latest state from contract
       await loadPolicies();
-      
+
       // Show success message
       setClaimSuccess(`Successfully claimed ${payoutAmount} tokens!`);
       setError(null);
-      
+
       // Clear success message after 5 seconds
       setTimeout(() => setClaimSuccess(null), 5000);
-    } catch (err: any) {
-      setError(err.message || "Failed to file claim");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to file claim");
       setClaimSuccess(null);
     } finally {
       setClaimingPolicyId(null);
@@ -327,8 +358,8 @@ export function TournamentDetails() {
       const contract = new PokerCoolerInsurance(contractAddress, null, studioUrl);
       const info = await contract.getTournamentInfo(tournamentUrl);
       setTournamentInfo(info);
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch tournament information");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to fetch tournament information");
     } finally {
       setLoading(false);
     }
@@ -344,7 +375,28 @@ export function TournamentDetails() {
     // Reload policies when dialog closes in case insurance was purchased
     if (!open) {
       loadPolicies();
+      // Reset selected tournament
+      setSelectedTournament(null);
     }
+  };
+
+  // Callback to update tournament when registration happens in dialog
+  const handleTournamentRegistered = (tournamentId: string) => {
+    updateTournamentRegistration(tournamentId, true);
+    // Update the selected tournament to reflect the change immediately
+    setSelectedTournament((prev) => {
+      if (prev && prev.id === tournamentId) {
+        return { ...prev, isRegistered: true };
+      }
+      return prev;
+    });
+  };
+
+  // Callback to update tournament when insurance is purchased in dialog
+  const handleInsurancePurchased = () => {
+    // Reload policies to get the new insurance
+    loadPolicies();
+    // The UI will automatically update because hasInsuranceForTournament checks policies
   };
 
   const formatDate = (dateString: string) => {
@@ -380,11 +432,7 @@ export function TournamentDetails() {
                 onKeyDown={(e) => e.key === "Enter" && handleGetInfo()}
               />
               <Button onClick={handleGetInfo} disabled={loading}>
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Get Info"
-                )}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Get Info"}
               </Button>
             </div>
 
@@ -433,9 +481,7 @@ export function TournamentDetails() {
         <Card>
           <CardHeader>
             <CardTitle>Tournament List</CardTitle>
-            <CardDescription>
-              Browse available tournaments and view details
-            </CardDescription>
+            <CardDescription>Browse available tournaments and view details</CardDescription>
           </CardHeader>
           <CardContent>
             {claimSuccess && (
@@ -463,10 +509,10 @@ export function TournamentDetails() {
               </motion.div>
             )}
             <div className="space-y-3">
-              {mockTournaments.map((tournament) => {
+              {tournaments.map((tournament) => {
                 const claimablePolicy = getClaimablePolicyForTournament(tournament);
                 const isClaiming = claimingPolicyId === claimablePolicy?.id;
-                
+
                 return (
                   <motion.div
                     key={tournament.id}
@@ -481,17 +527,11 @@ export function TournamentDetails() {
                         <div className="flex items-center gap-3 mb-2 flex-wrap">
                           <h3 className="font-semibold text-lg">{tournament.name}</h3>
                           <Badge
-                            variant={
-                              tournament.status === "finished"
-                                ? "secondary"
-                                : "default"
-                            }
+                            variant={tournament.status === "finished" ? "secondary" : "default"}
                           >
                             {tournament.status === "finished" ? "Finished" : "Upcoming"}
                           </Badge>
-                          <Badge
-                            variant={tournament.isRegistered ? "default" : "outline"}
-                          >
+                          <Badge variant={tournament.isRegistered ? "default" : "outline"}>
                             {tournament.isRegistered ? "Registered" : "Not Registered"}
                           </Badge>
                           {hasInsuranceForTournament(tournament) && (
@@ -567,15 +607,13 @@ export function TournamentDetails() {
 
       {selectedTournament && (
         <TournamentDialog
-          tournament={selectedTournament}
+          tournament={tournaments.find((t) => t.id === selectedTournament.id) || selectedTournament}
           open={isDialogOpen}
           onOpenChange={handleDialogClose}
+          onRegistered={() => handleTournamentRegistered(selectedTournament.id)}
+          onInsurancePurchased={() => handleInsurancePurchased()}
         />
       )}
     </>
   );
 }
-
-
-
-
