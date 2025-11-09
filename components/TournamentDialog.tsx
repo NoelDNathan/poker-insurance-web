@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,14 +24,24 @@ export function TournamentDialog({ tournament, open, onOpenChange, onRegistered,
   const { account, accountAddress, subtractBalance } = useAccount();
   const [playerId, setPlayerId] = useState("");
   const [registrationDate, setRegistrationDate] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isPurchasingInsurance, setIsPurchasingInsurance] = useState(false);
+  const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
+  const [shouldFocusPlayerId, setShouldFocusPlayerId] = useState(false);
+  const playerIdInputRef = useRef<HTMLInputElement>(null);
 
   const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
   const studioUrl = process.env.NEXT_PUBLIC_STUDIO_URL;
+
+  // Focus on player ID input when user accepts insurance prompt
+  useEffect(() => {
+    if (shouldFocusPlayerId && playerIdInputRef.current) {
+      playerIdInputRef.current.focus();
+      setShouldFocusPlayerId(false);
+    }
+  }, [shouldFocusPlayerId]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -62,6 +72,8 @@ export function TournamentDialog({ tournament, open, onOpenChange, onRegistered,
       if (onRegistered) {
         onRegistered(tournament.id);
       }
+      // Show insurance prompt dialog
+      setShowInsurancePrompt(true);
     } catch (err: any) {
       setError(err.message || "Failed to register for tournament");
     } finally {
@@ -97,6 +109,8 @@ export function TournamentDialog({ tournament, open, onOpenChange, onRegistered,
       setSuccess(`Insurance purchased successfully! ${tournament.premium} tokens deducted. Transaction: ${txHash}`);
       setPlayerId("");
       setRegistrationDate("");
+      // Close insurance prompt dialog
+      setShowInsurancePrompt(false);
       // Notify parent component to reload policies
       if (onInsurancePurchased) {
         onInsurancePurchased(tournament.id);
@@ -108,9 +122,69 @@ export function TournamentDialog({ tournament, open, onOpenChange, onRegistered,
     }
   };
 
+  const handleInsurancePromptYes = () => {
+    setShowInsurancePrompt(false);
+    // Pre-fill registration date with today's date if empty
+    if (!registrationDate) {
+      const today = new Date().toISOString().split("T")[0];
+      setRegistrationDate(today);
+    }
+    // Focus on player ID input after a short delay to ensure dialog is closed
+    setTimeout(() => {
+      setShouldFocusPlayerId(true);
+    }, 100);
+  };
+
+  const handleInsurancePromptNo = () => {
+    setShowInsurancePrompt(false);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto !bg-white">
+    <>
+      {/* Insurance Prompt Dialog */}
+      <Dialog open={showInsurancePrompt} onOpenChange={setShowInsurancePrompt}>
+        <DialogContent className="max-w-md !bg-white">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <Shield className="h-6 w-6 text-primary" />
+              <DialogTitle>Purchase Insurance?</DialogTitle>
+            </div>
+            <DialogDescription>
+              Would you like to purchase cooler insurance for this tournament?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="rounded-lg border bg-muted/50 p-4 mb-4">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Premium:</span>
+                  <span className="font-semibold">{tournament.premium} tokens</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Payout if eliminated by cooler:</span>
+                  <span className="font-semibold">{tournament.payout} tokens</span>
+                </div>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Protect yourself against cooler eliminations. If you get eliminated by a cooler,
+              you'll receive {tournament.payout} tokens as compensation.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={handleInsurancePromptNo}>
+              Not Now
+            </Button>
+            <Button onClick={handleInsurancePromptYes} className="bg-primary">
+              Yes, Purchase Insurance
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Main Tournament Dialog */}
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto !bg-white">
         <DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-4">
@@ -248,6 +322,7 @@ export function TournamentDialog({ tournament, open, onOpenChange, onRegistered,
                       Player ID
                     </label>
                     <Input
+                      ref={playerIdInputRef}
                       id="playerId"
                       value={playerId}
                       onChange={(e) => setPlayerId(e.target.value)}
@@ -324,6 +399,7 @@ export function TournamentDialog({ tournament, open, onOpenChange, onRegistered,
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
 

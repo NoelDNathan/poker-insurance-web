@@ -6,10 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { PokerCoolerInsurance, type InsurancePolicy } from "@/lib/PokerCoolerInsurance";
 import type { Address } from "viem";
 import { useAccount } from "@/lib/AccountContext";
-import { Loader2, Calendar, Users, Trophy, Shield, CheckCircle2, XCircle } from "lucide-react";
+import {
+  Loader2,
+  Calendar,
+  Users,
+  Trophy,
+  Shield,
+  CheckCircle2,
+  XCircle,
+  Coins,
+} from "lucide-react";
 import { TournamentDialog } from "./TournamentDialog";
 
 export interface Tournament {
@@ -24,6 +34,7 @@ export interface Tournament {
   payout: number;
   format: string;
   totalPlayers: number;
+  guaranteedPrizePool?: number;
 }
 
 const initialTournaments: Tournament[] = [
@@ -176,6 +187,22 @@ export function TournamentDetails() {
   const [claimingPolicyId, setClaimingPolicyId] = useState<string | null>(null);
   const [claimSuccess, setClaimSuccess] = useState<string | null>(null);
   const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments);
+
+  // Filter states - using arrays for ToggleGroup
+  const [statusFilters, setStatusFilters] = useState<string[]>(["finished", "upcoming"]);
+  const [registrationFilters, setRegistrationFilters] = useState<string[]>([
+    "registered",
+    "not-registered",
+  ]);
+  const [insuranceFilters, setInsuranceFilters] = useState<string[]>(["insured", "not-insured"]);
+
+  // Derived boolean states for filtering logic
+  const showFinished = statusFilters.includes("finished");
+  const showUpcoming = statusFilters.includes("upcoming");
+  const showRegistered = registrationFilters.includes("registered");
+  const showNotRegistered = registrationFilters.includes("not-registered");
+  const showInsured = insuranceFilters.includes("insured");
+  const showNotInsured = insuranceFilters.includes("not-insured");
 
   const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
   const studioUrl = process.env.NEXT_PUBLIC_STUDIO_URL;
@@ -408,6 +435,49 @@ export function TournamentDetails() {
     });
   };
 
+  const calculateGuaranteedPrizePool = (tournament: Tournament): number => {
+    // If guaranteed prize pool is explicitly set, use it
+    if (tournament.guaranteedPrizePool !== undefined) {
+      return tournament.guaranteedPrizePool;
+    }
+
+    // Calculate based on registered players
+    const currentPrizePool = tournament.totalPlayers * tournament.buyIn;
+
+    // For upcoming tournaments with no players, use a minimum guarantee
+    // based on a reasonable expected minimum (e.g., 50 players minimum)
+    if (tournament.status === "upcoming" && currentPrizePool === 0) {
+      return tournament.buyIn * 50; // Minimum guaranteed prize pool
+    }
+
+    return currentPrizePool;
+  };
+
+  // Filter and sort tournaments
+  const filteredAndSortedTournaments = tournaments
+    .filter((tournament) => {
+      // Filter by status
+      if (tournament.status === "finished" && !showFinished) return false;
+      if (tournament.status === "upcoming" && !showUpcoming) return false;
+
+      // Filter by registration status
+      if (tournament.isRegistered && !showRegistered) return false;
+      if (!tournament.isRegistered && !showNotRegistered) return false;
+
+      // Filter by insurance status
+      const hasInsurance = hasInsuranceForTournament(tournament);
+      if (hasInsurance && !showInsured) return false;
+      if (!hasInsurance && !showNotInsured) return false;
+
+      return true;
+    })
+    .sort((a, b) => {
+      // Sort by date (most recent first)
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      return dateB - dateA;
+    });
+
   return (
     <>
       <motion.div
@@ -484,6 +554,76 @@ export function TournamentDetails() {
             <CardDescription>Browse available tournaments and view details</CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Filters */}
+            <div className="mb-6 space-y-4 pb-4 border-b">
+              <div>
+                <h4 className="text-sm font-semibold mb-3">Filter by Status</h4>
+                <ToggleGroup
+                  type="multiple"
+                  value={statusFilters}
+                  onValueChange={(value: string[]) => {
+                    if (value.length > 0) {
+                      setStatusFilters(value);
+                    }
+                  }}
+                  className="justify-start"
+                >
+                  <ToggleGroupItem value="finished" aria-label="Toggle finished">
+                    Finished
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="upcoming" aria-label="Toggle upcoming">
+                    Upcoming
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold mb-3">Filter by Registration</h4>
+                <ToggleGroup
+                  type="multiple"
+                  value={registrationFilters}
+                  onValueChange={(value: string[]) => {
+                    if (value.length > 0) {
+                      setRegistrationFilters(value);
+                    }
+                  }}
+                  className="justify-start"
+                >
+                  <ToggleGroupItem value="registered" aria-label="Toggle registered">
+                    Registered
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="not-registered" aria-label="Toggle not registered">
+                    Not Registered
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold mb-3">Filter by Insurance</h4>
+                <ToggleGroup
+                  type="multiple"
+                  value={insuranceFilters}
+                  onValueChange={(value: string[]) => {
+                    if (value.length > 0) {
+                      setInsuranceFilters(value);
+                    }
+                  }}
+                  className="justify-start"
+                >
+                  <ToggleGroupItem value="insured" aria-label="Toggle insured">
+                    Insured
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="not-insured" aria-label="Toggle not insured">
+                    Not Insured
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+            </div>
+
+            <div className="mb-4 text-sm text-muted-foreground">
+              Showing {filteredAndSortedTournaments.length} of {tournaments.length} tournaments
+            </div>
+
             {claimSuccess && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
@@ -509,97 +649,114 @@ export function TournamentDetails() {
               </motion.div>
             )}
             <div className="space-y-3">
-              {tournaments.map((tournament) => {
-                const claimablePolicy = getClaimablePolicyForTournament(tournament);
-                const isClaiming = claimingPolicyId === claimablePolicy?.id;
+              {filteredAndSortedTournaments.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No tournaments match the selected filters.</p>
+                  <p className="text-xs mt-2">Try adjusting your filter options.</p>
+                </div>
+              ) : (
+                filteredAndSortedTournaments.map((tournament) => {
+                  const claimablePolicy = getClaimablePolicyForTournament(tournament);
+                  const isClaiming = claimingPolicyId === claimablePolicy?.id;
 
-                return (
-                  <motion.div
-                    key={tournament.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3 }}
-                    onClick={() => handleTournamentClick(tournament)}
-                    className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2 flex-wrap">
-                          <h3 className="font-semibold text-lg">{tournament.name}</h3>
-                          <Badge
-                            variant={tournament.status === "finished" ? "secondary" : "default"}
-                          >
-                            {tournament.status === "finished" ? "Finished" : "Upcoming"}
-                          </Badge>
-                          <Badge variant={tournament.isRegistered ? "default" : "outline"}>
-                            {tournament.isRegistered ? "Registered" : "Not Registered"}
-                          </Badge>
-                          {hasInsuranceForTournament(tournament) && (
-                            <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                              <Shield className="h-3 w-3 mr-1" />
-                              Insured
+                  return (
+                    <motion.div
+                      key={tournament.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3 }}
+                      onClick={() => handleTournamentClick(tournament)}
+                      className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2 flex-wrap">
+                            <h3 className="font-semibold text-lg">{tournament.name}</h3>
+                            <Badge
+                              variant={tournament.status === "finished" ? "secondary" : "default"}
+                            >
+                              {tournament.status === "finished" ? "Finished" : "Upcoming"}
                             </Badge>
-                          )}
-                          {claimablePolicy && (
-                            <Badge variant="default" className="bg-orange-600 hover:bg-orange-700">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Claimable
+                            <Badge variant={tournament.isRegistered ? "default" : "outline"}>
+                              {tournament.isRegistered ? "Registered" : "Not Registered"}
                             </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-1">
-                            <Calendar className="h-4 w-4" />
-                            <span>{formatDate(tournament.date)}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Trophy className="h-4 w-4" />
-                            <span>{tournament.buyIn} tokens buy-in</span>
-                          </div>
-                          {tournament.status === "finished" && (
-                            <div className="flex items-center gap-1">
-                              <Users className="h-4 w-4" />
-                              <span>{tournament.totalPlayers} players</span>
-                            </div>
-                          )}
-                          {claimablePolicy && (
-                            <div className="flex items-center gap-1 text-green-600 font-semibold">
-                              <Shield className="h-4 w-4" />
-                              <span>Claim {Number(claimablePolicy.payout_amount)} tokens</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {claimablePolicy && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={(e) => handleClaimInsurance(e, tournament)}
-                            disabled={isClaiming || !account}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            {isClaiming ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Claiming...
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle2 className="h-4 w-4 mr-2" />
-                                Claim
-                              </>
+                            {hasInsuranceForTournament(tournament) && (
+                              <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                                <Shield className="h-3 w-3 mr-1" />
+                                Insured
+                              </Badge>
                             )}
+                            {claimablePolicy && (
+                              <Badge
+                                variant="default"
+                                className="bg-orange-600 hover:bg-orange-700"
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Claimable
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-4 w-4" />
+                              <span>{formatDate(tournament.date)}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Trophy className="h-4 w-4" />
+                              <span>{tournament.buyIn} tokens buy-in</span>
+                            </div>
+                            {tournament.status === "finished" && (
+                              <div className="flex items-center gap-1">
+                                <Users className="h-4 w-4" />
+                                <span>{tournament.totalPlayers} players</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1">
+                              <Coins className="h-4 w-4" />
+                              <span>
+                                {calculateGuaranteedPrizePool(tournament).toLocaleString()} tokens
+                                prize pool
+                              </span>
+                            </div>
+                            {claimablePolicy && (
+                              <div className="flex items-center gap-1 text-green-600 font-semibold">
+                                <Shield className="h-4 w-4" />
+                                <span>Claim {Number(claimablePolicy.payout_amount)} tokens</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {claimablePolicy && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={(e) => handleClaimInsurance(e, tournament)}
+                              disabled={isClaiming || !account}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              {isClaiming ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Claiming...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                                  Claim
+                                </>
+                              )}
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm">
+                            View Details
                           </Button>
-                        )}
-                        <Button variant="ghost" size="sm">
-                          View Details
-                        </Button>
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
+                    </motion.div>
+                  );
+                })
+              )}
             </div>
           </CardContent>
         </Card>
