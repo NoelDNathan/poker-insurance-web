@@ -6,7 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PokerCoolerInsurance, type InsurancePolicy } from "@/lib/PokerCoolerInsurance";
 import type { Address } from "viem";
 import { useAccount } from "@/lib/AccountContext";
@@ -188,21 +194,18 @@ export function TournamentDetails() {
   const [claimSuccess, setClaimSuccess] = useState<string | null>(null);
   const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments);
 
-  // Filter states - using arrays for ToggleGroup
-  const [statusFilters, setStatusFilters] = useState<string[]>(["finished", "upcoming"]);
-  const [registrationFilters, setRegistrationFilters] = useState<string[]>([
-    "registered",
-    "not-registered",
-  ]);
-  const [insuranceFilters, setInsuranceFilters] = useState<string[]>(["insured", "not-insured"]);
+  // Filter states - using strings for Select (single selection or "all")
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [registrationFilter, setRegistrationFilter] = useState<string>("all");
+  const [insuranceFilter, setInsuranceFilter] = useState<string>("all");
 
   // Derived boolean states for filtering logic
-  const showFinished = statusFilters.includes("finished");
-  const showUpcoming = statusFilters.includes("upcoming");
-  const showRegistered = registrationFilters.includes("registered");
-  const showNotRegistered = registrationFilters.includes("not-registered");
-  const showInsured = insuranceFilters.includes("insured");
-  const showNotInsured = insuranceFilters.includes("not-insured");
+  const showFinished = statusFilter === "all" || statusFilter === "finished";
+  const showUpcoming = statusFilter === "all" || statusFilter === "upcoming";
+  const showRegistered = registrationFilter === "all" || registrationFilter === "registered";
+  const showNotRegistered = registrationFilter === "all" || registrationFilter === "not-registered";
+  const showInsured = insuranceFilter === "all" || insuranceFilter === "insured";
+  const showNotInsured = insuranceFilter === "all" || insuranceFilter === "not-insured";
 
   const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
   const studioUrl = process.env.NEXT_PUBLIC_STUDIO_URL;
@@ -556,67 +559,48 @@ export function TournamentDetails() {
           <CardContent>
             {/* Filters */}
             <div className="mb-6 space-y-4 pb-4 border-b">
-              <div>
-                <h4 className="text-sm font-semibold mb-3">Filter by Status</h4>
-                <ToggleGroup
-                  type="multiple"
-                  value={statusFilters}
-                  onValueChange={(value: string[]) => {
-                    if (value.length > 0) {
-                      setStatusFilters(value);
-                    }
-                  }}
-                  className="justify-start"
-                >
-                  <ToggleGroupItem value="finished" aria-label="Toggle finished">
-                    Finished
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="upcoming" aria-label="Toggle upcoming">
-                    Upcoming
-                  </ToggleGroupItem>
-                </ToggleGroup>
-              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Filter by Status</label>
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="finished">Finished</SelectItem>
+                      <SelectItem value="upcoming">Upcoming</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div>
-                <h4 className="text-sm font-semibold mb-3">Filter by Registration</h4>
-                <ToggleGroup
-                  type="multiple"
-                  value={registrationFilters}
-                  onValueChange={(value: string[]) => {
-                    if (value.length > 0) {
-                      setRegistrationFilters(value);
-                    }
-                  }}
-                  className="justify-start"
-                >
-                  <ToggleGroupItem value="registered" aria-label="Toggle registered">
-                    Registered
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="not-registered" aria-label="Toggle not registered">
-                    Not Registered
-                  </ToggleGroupItem>
-                </ToggleGroup>
-              </div>
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Filter by Registration</label>
+                  <Select value={registrationFilter} onValueChange={setRegistrationFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select registration" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Registration</SelectItem>
+                      <SelectItem value="registered">Registered</SelectItem>
+                      <SelectItem value="not-registered">Not Registered</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div>
-                <h4 className="text-sm font-semibold mb-3">Filter by Insurance</h4>
-                <ToggleGroup
-                  type="multiple"
-                  value={insuranceFilters}
-                  onValueChange={(value: string[]) => {
-                    if (value.length > 0) {
-                      setInsuranceFilters(value);
-                    }
-                  }}
-                  className="justify-start"
-                >
-                  <ToggleGroupItem value="insured" aria-label="Toggle insured">
-                    Insured
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="not-insured" aria-label="Toggle not insured">
-                    Not Insured
-                  </ToggleGroupItem>
-                </ToggleGroup>
+                <div>
+                  <label className="text-sm font-semibold mb-2 block">Filter by Insurance</label>
+                  <Select value={insuranceFilter} onValueChange={setInsuranceFilter}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select insurance" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Insurance</SelectItem>
+                      <SelectItem value="insured">Insured</SelectItem>
+                      <SelectItem value="not-insured">Not Insured</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
