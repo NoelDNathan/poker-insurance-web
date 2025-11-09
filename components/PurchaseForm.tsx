@@ -11,7 +11,7 @@ import { useAccount } from "@/lib/AccountContext";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 export function PurchaseForm() {
-  const { account, accountAddress } = useAccount();
+  const { account, accountAddress, subtractBalance } = useAccount();
   const [tournamentId, setTournamentId] = useState("");
   const [tournamentUrl, setTournamentUrl] = useState("");
   const [playerId, setPlayerId] = useState("");
@@ -54,6 +54,11 @@ export function PurchaseForm() {
       return;
     }
 
+    if (!contractAddress || contractAddress.trim() === "") {
+      setError("Contract address is not configured. Please set NEXT_PUBLIC_CONTRACT_ADDRESS in your .env.local file.");
+      return;
+    }
+
     if (!tournamentId || !tournamentUrl || !playerId || !registrationDate) {
       setError("Please fill in all fields");
       return;
@@ -71,7 +76,12 @@ export function PurchaseForm() {
         playerId,
         registrationDate
       );
-      setSuccess(`Insurance purchased successfully! Transaction: ${txHash}`);
+      // Subtract premium from balance
+      const premium = tournamentInfo ? Number(tournamentInfo.insurance_premium) : 0;
+      if (premium > 0) {
+        subtractBalance(premium);
+      }
+      setSuccess(`Insurance purchased successfully! ${premium} tokens deducted. Transaction: ${txHash}`);
       // Reset form
       setTournamentId("");
       setTournamentUrl("");

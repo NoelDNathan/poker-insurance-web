@@ -19,7 +19,7 @@ interface TournamentDialogProps {
 }
 
 export function TournamentDialog({ tournament, open, onOpenChange }: TournamentDialogProps) {
-  const { account, accountAddress } = useAccount();
+  const { account, accountAddress, subtractBalance } = useAccount();
   const [playerId, setPlayerId] = useState("");
   const [registrationDate, setRegistrationDate] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,7 +53,9 @@ export function TournamentDialog({ tournament, open, onOpenChange }: TournamentD
     try {
       // Simulate registration - in a real app, this would call a registration API
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      setSuccess("Successfully registered for the tournament!");
+      // Subtract buy-in from balance
+      subtractBalance(tournament.buyIn);
+      setSuccess(`Successfully registered for the tournament! ${tournament.buyIn} tokens deducted.`);
       // Update tournament registration status would happen here
     } catch (err: any) {
       setError(err.message || "Failed to register for tournament");
@@ -85,7 +87,9 @@ export function TournamentDialog({ tournament, open, onOpenChange }: TournamentD
         playerId,
         registrationDate
       );
-      setSuccess(`Insurance purchased successfully! Transaction: ${txHash}`);
+      // Subtract premium from balance
+      subtractBalance(tournament.premium);
+      setSuccess(`Insurance purchased successfully! ${tournament.premium} tokens deducted. Transaction: ${txHash}`);
       setPlayerId("");
       setRegistrationDate("");
     } catch (err: any) {

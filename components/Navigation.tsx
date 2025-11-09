@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "@/lib/AccountContext";
-import { Wallet, LogOut } from "lucide-react";
+import { Wallet, LogOut, Coins } from "lucide-react";
 
 export function Navigation() {
   const pathname = usePathname();
-  const { account, connectAccount, disconnectAccount, accountAddress } = useAccount();
+  const { account, connectAccount, disconnectAccount, accountAddress, balance } = useAccount();
 
   return (
     <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -40,9 +40,15 @@ export function Navigation() {
           <div className="flex items-center gap-4">
             {account ? (
               <>
-                <div className="text-sm">
-                  <p className="text-muted-foreground">Connected</p>
-                  <p className="font-mono text-xs">{accountAddress?.slice(0, 10)}...</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted border">
+                    <Coins className="h-4 w-4 text-primary" />
+                    <span className="font-semibold">{balance.toLocaleString()} tokens</span>
+                  </div>
+                  <div className="text-sm">
+                    <p className="text-muted-foreground">Connected</p>
+                    <p className="font-mono text-xs">{accountAddress?.slice(0, 10)}...</p>
+                  </div>
                 </div>
                 <Button variant="outline" size="sm" onClick={disconnectAccount}>
                   <LogOut className="h-4 w-4 mr-2" />
@@ -61,7 +67,3 @@ export function Navigation() {
     </nav>
   );
 }
-
-
-
-

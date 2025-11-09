@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PokerCoolerInsurance } from "@/lib/PokerCoolerInsurance";
-import { Loader2, Calendar, Users, Trophy } from "lucide-react";
+import { PokerCoolerInsurance, type InsurancePolicy } from "@/lib/PokerCoolerInsurance";
+import { useAccount } from "@/lib/AccountContext";
+import { Loader2, Calendar, Users, Trophy, Shield, CheckCircle2, XCircle } from "lucide-react";
 import { TournamentDialog } from "./TournamentDialog";
 
 export interface Tournament {
@@ -158,15 +159,159 @@ const mockTournaments: Tournament[] = [
 ];
 
 export function TournamentDetails() {
+  const { account, accountAddress, addBalance } = useAccount();
   const [tournamentUrl, setTournamentUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [tournamentInfo, setTournamentInfo] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [policies, setPolicies] = useState<Record<string, InsurancePolicy>>({});
+  const [loadingPolicies, setLoadingPolicies] = useState(false);
+  const [claimingPolicyId, setClaimingPolicyId] = useState<string | null>(null);
+  const [claimSuccess, setClaimSuccess] = useState<string | null>(null);
 
   const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
   const studioUrl = process.env.NEXT_PUBLIC_STUDIO_URL;
+
+  const getDefaultMockPolicies = useCallback((playerAddress: string | null): Record<string, InsurancePolicy> => {
+    // Policy 1: Tournament that finished, lost by cooler, can claim
+    const finishedTournament = mockTournaments.find(t => t.id === "tournament-001");
+    const policy1: InsurancePolicy = {
+      id: "policy-001",
+      player_address: (playerAddress || "0x0000000000000000000000000000000000000000") as any,
+      tournament_id: "tournament-001",
+      tournament_url: finishedTournament?.tournamentUrl || "http://localhost:8000/tournament_example.html",
+      player_id: "player123",
+      tournament_buy_in: BigInt(finishedTournament?.buyIn || 100),
+      premium_paid: BigInt(finishedTournament?.premium || 10),
+      has_claimed: false,
+      claim_resolved: false,
+      is_valid_cooler: true, // Lost by cooler, can claim
+      payout_amount: BigInt(finishedTournament?.payout || 50),
+      registration_date: "2024-01-10",
+    };
+
+    // Policy 2: Upcoming tournament, insurance active but tournament not played yet
+    const upcomingTournament = mockTournaments.find(t => t.id === "tournament-003");
+    const policy2: InsurancePolicy = {
+      id: "policy-002",
+      player_address: (playerAddress || "0x0000000000000000000000000000000000000000") as any,
+      tournament_id: "tournament-003",
+      tournament_url: upcomingTournament?.tournamentUrl || "http://localhost:8000/tournament_example.html",
+      player_id: "player123",
+      tournament_buy_in: BigInt(upcomingTournament?.buyIn || 500),
+      premium_paid: BigInt(upcomingTournament?.premium || 50),
+      has_claimed: false,
+      claim_resolved: false,
+      is_valid_cooler: false, // Tournament not played yet
+      payout_amount: BigInt(upcomingTournament?.payout || 250),
+      registration_date: "2024-05-01",
+    };
+
+    return {
+      "policy-001": policy1,
+      "policy-002": policy2,
+    };
+  }, []);
+
+  const loadPolicies = useCallback(async () => {
+    setLoadingPolicies(true);
+    try {
+      if (account && accountAddress) {
+        // Try to load real policies
+        const contract = new PokerCoolerInsurance(contractAddress, account, studioUrl);
+        const playerPolicies = await contract.getPlayerPolicies(accountAddress);
+        
+        // If there are real policies, use them; otherwise use mock policies
+        if (Object.keys(playerPolicies).length > 0) {
+          setPolicies(playerPolicies);
+        } else {
+          // No real policies, use default mock policies
+          setPolicies(getDefaultMockPolicies(accountAddress));
+        }
+      } else {
+        // No account connected, use default mock policies for demo
+        setPolicies(getDefaultMockPolicies(null));
+      }
+    } catch (err: any) {
+      console.error("Failed to load policies:", err);
+      // On error, use default mock policies
+      setPolicies(getDefaultMockPolicies(accountAddress));
+    } finally {
+      setLoadingPolicies(false);
+    }
+  }, [account, accountAddress, contractAddress, studioUrl, getDefaultMockPolicies]);
+
+  useEffect(() => {
+    loadPolicies();
+  }, [loadPolicies]);
+
+  const hasInsuranceForTournament = (tournament: Tournament): boolean => {
+    if (!policies || Object.keys(policies).length === 0) return false;
+    
+    // Only check by tournament_id since all tournaments share the same URL
+    return Object.values(policies).some((policy) => {
+      return policy.tournament_id === tournament.id;
+    });
+  };
+
+  const getClaimablePolicyForTournament = (tournament: Tournament): InsurancePolicy | null => {
+    if (!policies || Object.keys(policies).length === 0) return null;
+    
+    const policy = Object.values(policies).find((policy) => {
+      return (
+        policy.tournament_id === tournament.id &&
+        policy.is_valid_cooler &&
+        !policy.has_claimed
+      );
+    });
+    
+    return policy || null;
+  };
+
+  const handleClaimInsurance = async (e: React.MouseEvent, tournament: Tournament) => {
+    e.stopPropagation(); // Prevent opening the dialog
+    
+    if (!account) {
+      setError("Please connect an account first");
+      return;
+    }
+
+    const policy = getClaimablePolicyForTournament(tournament);
+    if (!policy) {
+      setError("No claimable policy found for this tournament");
+      return;
+    }
+
+    setClaimingPolicyId(policy.id);
+    setError(null);
+    setClaimSuccess(null);
+
+    try {
+      const contract = new PokerCoolerInsurance(contractAddress, account, studioUrl);
+      const txHash = await contract.fileClaim(policy.id);
+      
+      // Add payout to balance
+      const payoutAmount = Number(policy.payout_amount);
+      addBalance(payoutAmount);
+      
+      // Reload policies to update status
+      await loadPolicies();
+      
+      // Show success message
+      setClaimSuccess(`Successfully claimed ${payoutAmount} tokens!`);
+      setError(null);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setClaimSuccess(null), 5000);
+    } catch (err: any) {
+      setError(err.message || "Failed to file claim");
+      setClaimSuccess(null);
+    } finally {
+      setClaimingPolicyId(null);
+    }
+  };
 
   const handleGetInfo = async () => {
     if (!tournamentUrl) {
@@ -192,6 +337,14 @@ export function TournamentDetails() {
   const handleTournamentClick = (tournament: Tournament) => {
     setSelectedTournament(tournament);
     setIsDialogOpen(true);
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    setIsDialogOpen(open);
+    // Reload policies when dialog closes in case insurance was purchased
+    if (!open) {
+      loadPolicies();
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -285,58 +438,128 @@ export function TournamentDetails() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {claimSuccess && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800"
+              >
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span className="font-medium">{claimSuccess}</span>
+                </div>
+              </motion.div>
+            )}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800"
+              >
+                <div className="flex items-center gap-2">
+                  <XCircle className="h-4 w-4" />
+                  <span className="font-medium">{error}</span>
+                </div>
+              </motion.div>
+            )}
             <div className="space-y-3">
-              {mockTournaments.map((tournament) => (
-                <motion.div
-                  key={tournament.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3 }}
-                  onClick={() => handleTournamentClick(tournament)}
-                  className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-lg">{tournament.name}</h3>
-                        <Badge
-                          variant={
-                            tournament.status === "finished"
-                              ? "secondary"
-                              : "default"
-                          }
-                        >
-                          {tournament.status === "finished" ? "Finished" : "Upcoming"}
-                        </Badge>
-                        <Badge
-                          variant={tournament.isRegistered ? "default" : "outline"}
-                        >
-                          {tournament.isRegistered ? "Registered" : "Not Registered"}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4" />
-                          <span>{formatDate(tournament.date)}</span>
+              {mockTournaments.map((tournament) => {
+                const claimablePolicy = getClaimablePolicyForTournament(tournament);
+                const isClaiming = claimingPolicyId === claimablePolicy?.id;
+                
+                return (
+                  <motion.div
+                    key={tournament.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3 }}
+                    onClick={() => handleTournamentClick(tournament)}
+                    className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
+                          <h3 className="font-semibold text-lg">{tournament.name}</h3>
+                          <Badge
+                            variant={
+                              tournament.status === "finished"
+                                ? "secondary"
+                                : "default"
+                            }
+                          >
+                            {tournament.status === "finished" ? "Finished" : "Upcoming"}
+                          </Badge>
+                          <Badge
+                            variant={tournament.isRegistered ? "default" : "outline"}
+                          >
+                            {tournament.isRegistered ? "Registered" : "Not Registered"}
+                          </Badge>
+                          {hasInsuranceForTournament(tournament) && (
+                            <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                              <Shield className="h-3 w-3 mr-1" />
+                              Insured
+                            </Badge>
+                          )}
+                          {claimablePolicy && (
+                            <Badge variant="default" className="bg-orange-600 hover:bg-orange-700">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Claimable
+                            </Badge>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Trophy className="h-4 w-4" />
-                          <span>{tournament.buyIn} tokens buy-in</span>
-                        </div>
-                        {tournament.status === "finished" && (
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <div className="flex items-center gap-1">
-                            <Users className="h-4 w-4" />
-                            <span>{tournament.totalPlayers} players</span>
+                            <Calendar className="h-4 w-4" />
+                            <span>{formatDate(tournament.date)}</span>
                           </div>
+                          <div className="flex items-center gap-1">
+                            <Trophy className="h-4 w-4" />
+                            <span>{tournament.buyIn} tokens buy-in</span>
+                          </div>
+                          {tournament.status === "finished" && (
+                            <div className="flex items-center gap-1">
+                              <Users className="h-4 w-4" />
+                              <span>{tournament.totalPlayers} players</span>
+                            </div>
+                          )}
+                          {claimablePolicy && (
+                            <div className="flex items-center gap-1 text-green-600 font-semibold">
+                              <Shield className="h-4 w-4" />
+                              <span>Claim {Number(claimablePolicy.payout_amount)} tokens</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {claimablePolicy && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={(e) => handleClaimInsurance(e, tournament)}
+                            disabled={isClaiming || !account}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            {isClaiming ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Claiming...
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="h-4 w-4 mr-2" />
+                                Claim
+                              </>
+                            )}
+                          </Button>
                         )}
+                        <Button variant="ghost" size="sm">
+                          View Details
+                        </Button>
                       </div>
                     </div>
-                    <Button variant="ghost" size="sm">
-                      View Details
-                    </Button>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -346,7 +569,7 @@ export function TournamentDetails() {
         <TournamentDialog
           tournament={selectedTournament}
           open={isDialogOpen}
-          onOpenChange={setIsDialogOpen}
+          onOpenChange={handleDialogClose}
         />
       )}
     </>

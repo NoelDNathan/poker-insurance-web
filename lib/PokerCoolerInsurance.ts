@@ -30,6 +30,9 @@ export class PokerCoolerInsurance {
   private studioUrl?: string;
 
   constructor(contractAddress: string, account: Account | null = null, studioUrl?: string) {
+    if (!contractAddress || contractAddress.trim() === "") {
+      throw new Error("Contract address is required. Please set NEXT_PUBLIC_CONTRACT_ADDRESS environment variable.");
+    }
     this.contractAddress = contractAddress;
     this.account = account;
     this.studioUrl = studioUrl;
@@ -40,6 +43,14 @@ export class PokerCoolerInsurance {
   }
 
   private getClient() {
+    if (!this.account) {
+      throw new Error("Account is required for this operation. Please connect an account first.");
+    }
+    
+    if (!this.contractAddress || this.contractAddress.trim() === "") {
+      throw new Error("Contract address is not configured. Please set NEXT_PUBLIC_CONTRACT_ADDRESS environment variable.");
+    }
+    
     return getClient(this.account, this.studioUrl);
   }
 

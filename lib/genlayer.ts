@@ -33,6 +33,13 @@ export function getClient(account: Account | null = null, studioUrl?: string) {
     ...(account ? { account } : {}),
     ...(studioUrl ? { endpoint: studioUrl } : {}),
   };
-  return createClient(config);
+  
+  // Ensure account is properly set if provided
+  if (account && !config.account) {
+    config.account = account;
+  }
+  
+  const client = createClient(config);
+  return client;
 }
 
