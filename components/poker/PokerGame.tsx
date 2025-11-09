@@ -24,13 +24,9 @@ interface PokerGameProps {
 
 export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) => {
   const router = useRouter();
-  const [gameState, setGameState] = useState<GameState>(() =>
-    createInitialGameState(gameMode)
-  );
+  const [gameState, setGameState] = useState<GameState>(() => createInitialGameState(gameMode));
   const [isProcessing, setIsProcessing] = useState(false);
-  const [dealtCards, setDealtCards] = useState<boolean[]>(
-    Array(5).fill(false)
-  );
+  const [dealtCards, setDealtCards] = useState<boolean[]>(Array(5).fill(false));
   const [showNextHandButton, setShowNextHandButton] = useState(false);
 
   useEffect(() => {
@@ -163,17 +159,17 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
-      <div className="p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-white">Poker Game</h1>
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col overflow-hidden">
+      <div className="p-2 md:p-4 flex justify-between items-center flex-shrink-0">
+        <h1 className="text-xl md:text-2xl font-bold text-white">Poker Game</h1>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExit} className="text-white">
+          <Button variant="outline" onClick={handleExit} className="text-white text-sm">
             Exit Game
           </Button>
         </div>
       </div>
 
-      <div className="flex-1">
+      <div className="flex-1 flex items-start justify-center min-h-0 overflow-hidden pt-2">
         <Table
           pot={gameState.pot}
           currentRound={gameState.currentRound}
@@ -217,7 +213,7 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
       )}
 
       {isHumanTurn && humanPlayer && (
-        <div className="p-4">
+        <div className="p-2 md:p-4 pb-4 flex-shrink-0">
           <BettingControls
             onFold={() => handlePlayerAction("fold")}
             onCheck={() => handlePlayerAction("check")}
@@ -232,7 +228,7 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
       )}
 
       {!isHumanTurn && !gameState.isHandComplete && gameState.currentRound !== "showdown" && (
-        <div className="p-4 text-center text-white">
+        <div className="p-2 md:p-4 text-center text-white flex-shrink-0">
           <p>Waiting for other players...</p>
           <p className="text-sm text-gray-400">
             {gameState.players[gameState.currentTurnIndex]?.name} is thinking...
@@ -240,7 +236,7 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
         </div>
       )}
 
-      <div className="p-4 text-center text-white text-sm">
+      <div className="p-2 md:p-4 text-white text-xs md:text-sm flex-shrink-0 flex justify-end">
         <p>
           Round: {roundLabels[gameState.currentRound]} | Hand #{gameState.handNumber} | Mode:{" "}
           {gameState.gameMode}
@@ -249,4 +245,3 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
     </div>
   );
 };
-

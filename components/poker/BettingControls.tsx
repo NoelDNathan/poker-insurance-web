@@ -40,81 +40,73 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
   const canRaise = playerBalance > 0 && currentBet < playerBalance + playerBet;
 
   return (
-    <div className="rounded-lg p-6 shadow-lg max-w-md mx-auto bg-gradient-to-br from-white/70 via-violet-100/50 to-fuchsia-100/40 backdrop-blur-md border border-white/20">
-      <h3 className="text-lg font-semibold mb-4 text-center">Your Turn</h3>
+    <div className="rounded-xl p-2 shadow-xl max-w-md mx-auto bg-gradient-to-br from-slate-800/90 via-slate-700/90 to-slate-800/90 backdrop-blur-md border border-slate-600/50">
+      <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">
+        {canCheck ? (
+          <button
+            onClick={onCheck}
+            disabled={isLoading}
+            className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-500 disabled:to-gray-600 text-white px-2.5 py-1.5 rounded-lg font-bold text-xs shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none disabled:cursor-not-allowed border border-green-500/50"
+          >
+            Check
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={onFold}
+              disabled={isLoading}
+              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:from-gray-500 disabled:to-gray-600 text-white px-2.5 py-1.5 rounded-lg font-bold text-xs shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none disabled:cursor-not-allowed border border-red-500/50 min-w-[70px]"
+            >
+              Fold
+            </button>
+            <button
+              onClick={onCall}
+              disabled={isLoading || !canCall}
+              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-500 disabled:to-gray-600 text-white px-2.5 py-1.5 rounded-lg font-bold text-xs shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none disabled:cursor-not-allowed border border-blue-500/50 min-w-[85px]"
+            >
+              Call ${callAmount.toFixed(0)}
+            </button>
+          </>
+        )}
 
-      <div className="space-y-4">
-        <div className="flex items-start gap-3 flex-wrap">
-          <div className="flex-1 min-w-0">
-            {canCheck ? (
+        {canRaise && (
+          <>
+            {!showRaiseInput ? (
               <button
-                onClick={onCheck}
+                onClick={() => setShowRaiseInput(true)}
                 disabled={isLoading}
-                className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg font-semibold transition-colors"
+                className="flex-1 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 disabled:from-gray-500 disabled:to-gray-600 text-white px-2.5 py-1.5 rounded-lg font-bold text-xs shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none disabled:cursor-not-allowed border border-amber-500/50"
               >
-                Check
+                Raise
               </button>
             ) : (
-              <div className="flex gap-2">
+              <div className="flex gap-1.5 flex-1 min-w-0">
+                <input
+                  type="number"
+                  value={raiseAmount}
+                  onChange={(e) => setRaiseAmount(e.target.value)}
+                  placeholder="Amount"
+                  className="flex-1 min-w-0 border-2 border-slate-500 rounded-lg px-2 py-1.5 bg-slate-900/80 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 text-xs font-medium shadow-inner"
+                  min={currentBet + 1}
+                  max={playerBalance + playerBet}
+                  step="1"
+                />
                 <button
-                  onClick={onFold}
-                  disabled={isLoading}
-                  className="bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg font-semibold transition-colors"
-                >
-                  Fold
-                </button>
-                <button
-                  onClick={onCall}
-                  disabled={isLoading || !canCall}
-                  className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg font-semibold transition-colors"
-                >
-                  Call ${callAmount.toFixed(0)}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {canRaise && (
-            <div className="flex-1 min-w-0">
-              {!showRaiseInput ? (
-                <button
-                  onClick={() => setShowRaiseInput(true)}
-                  disabled={isLoading}
-                  className="w-full bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg font-semibold transition-colors"
+                  onClick={handleRaise}
+                  disabled={
+                    isLoading ||
+                    !raiseAmount ||
+                    parseFloat(raiseAmount) <= currentBet ||
+                    parseFloat(raiseAmount) > playerBalance + playerBet
+                  }
+                  className="bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 disabled:from-gray-500 disabled:to-gray-600 text-white px-2.5 py-1.5 rounded-lg font-bold text-xs shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none disabled:cursor-not-allowed border border-amber-500/50 whitespace-nowrap flex-shrink-0"
                 >
                   Raise
                 </button>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex space-x-2">
-                    <input
-                      type="number"
-                      value={raiseAmount}
-                      onChange={(e) => setRaiseAmount(e.target.value)}
-                      placeholder="Raise amount"
-                      className="flex-1 min-w-0 border border-gray-300 rounded px-3 py-2 bg-white/80 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-yellow-500/50"
-                      min={currentBet + 1}
-                      max={playerBalance + playerBet}
-                      step="1"
-                    />
-                    <button
-                      onClick={handleRaise}
-                      disabled={
-                        isLoading ||
-                        !raiseAmount ||
-                        parseFloat(raiseAmount) <= currentBet ||
-                        parseFloat(raiseAmount) > playerBalance + playerBet
-                      }
-                      className="bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-400 text-white px-4 py-2 rounded font-semibold whitespace-nowrap flex-shrink-0"
-                    >
-                      Raise
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
