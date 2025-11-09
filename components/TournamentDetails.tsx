@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -229,6 +230,7 @@ const initialTournaments: Tournament[] = [
 ];
 
 export function TournamentDetails() {
+  const router = useRouter();
   const { account, accountAddress, addBalance } = useAccount();
   const [tournamentUrl, setTournamentUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -496,11 +498,10 @@ export function TournamentDetails() {
     return tournament.date === today;
   };
 
-  // Handle play button click (placeholder for future functionality)
+  // Handle play button click
   const handlePlayTournament = (e: React.MouseEvent, tournament: Tournament) => {
     e.stopPropagation(); // Prevent opening the dialog
-    // TODO: Implement tournament play functionality
-    console.log("Play tournament:", tournament.id);
+    router.push(`/play/${tournament.id}`);
   };
 
   const calculateGuaranteedPrizePool = (tournament: Tournament): number => {
