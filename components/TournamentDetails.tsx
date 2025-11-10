@@ -248,15 +248,69 @@ export function TournamentDetails() {
   const [, setLoadingPolicies] = useState(false);
   const [claimingPolicyId, setClaimingPolicyId] = useState<string | null>(null);
   const [claimSuccess, setClaimSuccess] = useState<string | null>(null);
-  const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments);
+  // Load tournaments state from localStorage on mount
+  const loadTournamentsState = (): Tournament[] => {
+    if (typeof window === "undefined") return initialTournaments;
+    try {
+      const stored = localStorage.getItem("tournaments_state");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Merge with initial tournaments to preserve any new tournaments
+        return initialTournaments.map((initial) => {
+          const storedTournament = parsed.find((t: Tournament) => t.id === initial.id);
+          return storedTournament
+            ? { ...initial, ...storedTournament, tournamentUrl: initial.tournamentUrl }
+            : initial;
+        });
+      }
+    } catch (error) {
+      console.error("Error loading tournaments state:", error);
+    }
+    return initialTournaments;
+  };
+
+  // Load insurance map from localStorage on mount
+  const loadInsuranceMap = (): Record<string, boolean> => {
+    if (typeof window === "undefined") return {};
+    try {
+      const stored = localStorage.getItem("hasInsuranceMap");
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (error) {
+      console.error("Error loading insurance map:", error);
+    }
+    return {};
+  };
+
+  // Load tournament contracts from localStorage on mount
+  const loadTournamentContracts = (): Record<string, string> => {
+    if (typeof window === "undefined") return {};
+    const contracts: Record<string, string> = {};
+    try {
+      // Load individual contract addresses from localStorage
+      initialTournaments.forEach((tournament) => {
+        const contractAddress = localStorage.getItem(`tournament_contract_${tournament.id}`);
+        if (contractAddress) {
+          contracts[tournament.id] = contractAddress;
+        }
+      });
+    } catch (error) {
+      console.error("Error loading tournament contracts:", error);
+    }
+    return contracts;
+  };
+
+  const [tournaments, setTournaments] = useState<Tournament[]>(loadTournamentsState);
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentError, setDeploymentError] = useState<string | null>(null);
   const [contractDeployed, setContractDeployed] = useState(false);
   const [deployedContractAddress, setDeployedContractAddress] = useState<string | null>(null);
   // Map to store contract addresses per tournament
-  const [tournamentContracts, setTournamentContracts] = useState<Record<string, string>>({});
+  const [tournamentContracts, setTournamentContracts] =
+    useState<Record<string, string>>(loadTournamentContracts);
   // Map to store insurance status per tournament
-  const [hasInsuranceMap, setHasInsuranceMap] = useState<Record<string, boolean>>({});
+  const [hasInsuranceMap, setHasInsuranceMap] = useState<Record<string, boolean>>(loadInsuranceMap);
 
   // Filter states - using strings for Select (single selection or "all")
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -338,6 +392,15 @@ export function TournamentDetails() {
             newInsuranceMap[tournament.id] = hasInsurance;
           }
         });
+
+        // Persist to localStorage
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("hasInsuranceMap", JSON.stringify(newInsuranceMap));
+          } catch (error) {
+            console.error("Error saving insurance map:", error);
+          }
+        }
 
         return newInsuranceMap;
       });
@@ -521,11 +584,23 @@ export function TournamentDetails() {
 
   // Function to update tournament registration status
   const updateTournamentRegistration = (tournamentId: string, isRegistered: boolean) => {
-    setTournaments((prevTournaments) =>
-      prevTournaments.map((tournament) =>
+    setTournaments((prevTournaments) => {
+      const updated = prevTournaments.map((tournament) =>
         tournament.id === tournamentId ? { ...tournament, isRegistered } : tournament
-      )
-    );
+      );
+      // Persist to localStorage
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(
+            "tournaments_state",
+            JSON.stringify(updated.map((t) => ({ id: t.id, isRegistered: t.isRegistered })))
+          );
+        } catch (error) {
+          console.error("Error saving tournaments state:", error);
+        }
+      }
+      return updated;
+    });
   };
 
   const getClaimablePolicyForTournament = (tournament: Tournament): InsurancePolicy | null => {
@@ -656,10 +731,21 @@ export function TournamentDetails() {
   // Callback to update tournament when insurance is purchased in dialog
   const handleInsurancePurchased = async (tournamentId: string) => {
     // Update insurance map immediately for the specific tournament
-    setHasInsuranceMap((prev) => ({
-      ...prev,
-      [tournamentId]: true,
-    }));
+    setHasInsuranceMap((prev) => {
+      const updated = {
+        ...prev,
+        [tournamentId]: true,
+      };
+      // Persist to localStorage
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("hasInsuranceMap", JSON.stringify(updated));
+        } catch (error) {
+          console.error("Error saving insurance map:", error);
+        }
+      }
+      return updated;
+    });
 
     // Wait a bit for the transaction to be confirmed, then reload policies
     // This gives the blockchain time to process the transaction
