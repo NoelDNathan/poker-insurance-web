@@ -157,20 +157,16 @@ export function TournamentDialog({
       if (!contractAddress) {
         console.log("[TournamentDialog] Deploying new contract for tournament:", tournament.id);
 
-        // Fetch contract code from API
-        const response = await fetch("/api/contract");
+        // Fetch contract code from public folder (static file)
+        const response = await fetch("/contracts/poker_tournament_V2.py");
         if (!response.ok) {
           throw new Error("Failed to fetch contract code");
         }
-        const { code } = await response.json();
+        const contractText = await response.text();
 
-        // Convert base64 to Uint8Array
-        const binaryString = atob(code);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const contractCode = bytes;
+        // Convert text to Uint8Array
+        const encoder = new TextEncoder();
+        const contractCode = encoder.encode(contractText);
 
         // Deploy contract
         const tournamentContract = new PokerTournament(null, account, studioUrl);

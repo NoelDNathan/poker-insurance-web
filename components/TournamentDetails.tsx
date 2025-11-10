@@ -622,22 +622,18 @@ export function TournamentDetails() {
       setDeploymentError(null);
 
       try {
-        // Fetch contract code from API
-        console.log("[TournamentDetails] Fetching contract code from API...");
-        const response = await fetch("/api/contract");
+        // Fetch contract code from public folder (static file)
+        console.log("[TournamentDetails] Fetching contract code from public folder...");
+        const response = await fetch("/contracts/poker_tournament_V2.py");
         if (!response.ok) {
           throw new Error("Failed to fetch contract code");
         }
-        const { code } = await response.json();
+        const contractText = await response.text();
         console.log("[TournamentDetails] Contract code fetched, converting to Uint8Array...");
 
-        // Convert base64 to Uint8Array
-        const binaryString = atob(code);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const contractCode = bytes;
+        // Convert text to Uint8Array
+        const encoder = new TextEncoder();
+        const contractCode = encoder.encode(contractText);
         console.log("[TournamentDetails] Contract code ready, size:", contractCode.length, "bytes");
 
         // Deploy contract
