@@ -15,6 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PokerCoolerInsurance, type InsurancePolicy } from "@/lib/PokerCoolerInsurance";
+import { PokerTournament } from "@/lib/PokerTournament";
+import { generateRandomAddress } from "@/lib/utils";
 import type { Address } from "viem";
 import { useAccount } from "@/lib/AccountContext";
 import {
@@ -247,6 +249,10 @@ export function TournamentDetails() {
   const [claimingPolicyId, setClaimingPolicyId] = useState<string | null>(null);
   const [claimSuccess, setClaimSuccess] = useState<string | null>(null);
   const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deploymentError, setDeploymentError] = useState<string | null>(null);
+  const [contractDeployed, setContractDeployed] = useState(false);
+  const [deployedContractAddress, setDeployedContractAddress] = useState<string | null>(null);
 
   // Filter states - using strings for Select (single selection or "all")
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -341,6 +347,103 @@ export function TournamentDetails() {
   useEffect(() => {
     loadPolicies();
   }, [loadPolicies]);
+
+  // Deploy contract on mount before showing tournament list
+  useEffect(() => {
+    const deployContract = async () => {
+      // Check if account is available
+      if (!account) {
+        console.log("[TournamentDetails] No account found, skipping deployment");
+        setDeploymentError("Please connect an account first");
+        return;
+      }
+
+      console.log("[TournamentDetails] Starting contract deployment...");
+      setIsDeploying(true);
+      setDeploymentError(null);
+
+      try {
+        // Fetch contract code from API
+        console.log("[TournamentDetails] Fetching contract code from API...");
+        const response = await fetch("/api/contract");
+        if (!response.ok) {
+          throw new Error("Failed to fetch contract code");
+        }
+        const { code } = await response.json();
+        console.log("[TournamentDetails] Contract code fetched, converting to Uint8Array...");
+
+        // Convert base64 to Uint8Array
+        const binaryString = atob(code);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const contractCode = bytes;
+        console.log("[TournamentDetails] Contract code ready, size:", contractCode.length, "bytes");
+
+        // Deploy contract
+        console.log("[TournamentDetails] Creating PokerTournament instance...");
+        const tournamentContract = new PokerTournament(null, account, studioUrl);
+        console.log("[TournamentDetails] Deploying contract...");
+        const contractAddress = await tournamentContract.deployContract(contractCode);
+        tournamentContract.setContractAddress(contractAddress);
+
+        // Store contract address in localStorage for future use
+        localStorage.setItem("poker_tournament_contract_address", contractAddress);
+        setDeployedContractAddress(contractAddress);
+        console.log(
+          "[TournamentDetails] Contract deployed successfully at address:",
+          contractAddress
+        );
+
+        // Set players after deployment
+        console.log("[TournamentDetails] Setting players...");
+
+        // Generate bot addresses (2 bots)
+        const botAddresses = Array.from({ length: 2 }, () => generateRandomAddress());
+        console.log("[TournamentDetails] Bot addresses generated:", botAddresses.length);
+
+        // Get user address
+        let userAddress = accountAddress || "";
+        if (!userAddress && account) {
+          // Try to get address from account object
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const accountAny = account as any;
+          if (accountAny.address) {
+            userAddress =
+              typeof accountAny.address === "string" ? accountAny.address : accountAny.address();
+          }
+        }
+
+        if (!userAddress) {
+          throw new Error("Could not get user address from account");
+        }
+        console.log("[TournamentDetails] User address:", userAddress);
+
+        // Set players: 3 players with balance 1000 each
+        const balances = Array(3).fill(1000);
+        const addresses = [userAddress, ...botAddresses];
+        console.log("[TournamentDetails] Setting players:", {
+          playerCount: 3,
+          balancePerPlayer: 1000,
+        });
+
+        await tournamentContract.setPlayers(balances, addresses);
+        console.log("[TournamentDetails] Players set successfully");
+
+        setContractDeployed(true);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("[TournamentDetails] Deployment error:", errorMessage);
+        setDeploymentError(errorMessage);
+        setContractDeployed(false);
+      } finally {
+        setIsDeploying(false);
+      }
+    };
+
+    deployContract();
+  }, [account, accountAddress, studioUrl]);
 
   // Function to update tournament registration status
   const updateTournamentRegistration = (tournamentId: string, isRegistered: boolean) => {
@@ -623,234 +726,280 @@ export function TournamentDetails() {
             <CardDescription>Browse available tournaments and view details</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* Filters */}
-            <div className="mb-6 space-y-4 pb-4 border-b">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-semibold mb-2 block">Filter by Status</label>
-                  <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="finished">Finished</SelectItem>
-                      <SelectItem value="upcoming">Upcoming</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-semibold mb-2 block">Filter by Registration</label>
-                  <Select value={registrationFilter} onValueChange={setRegistrationFilter}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select registration" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Registration</SelectItem>
-                      <SelectItem value="registered">Registered</SelectItem>
-                      <SelectItem value="not-registered">Not Registered</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-semibold mb-2 block">Filter by Insurance</label>
-                  <Select value={insuranceFilter} onValueChange={setInsuranceFilter}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select insurance" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Insurance</SelectItem>
-                      <SelectItem value="insured">Insured</SelectItem>
-                      <SelectItem value="not-insured">Not Insured</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            {/* Show loading state while deploying */}
+            {isDeploying && (
+              <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-muted-foreground">Deploying contract... Please wait.</p>
               </div>
-            </div>
-
-            <div className="mb-4 text-sm text-muted-foreground">
-              Showing {filteredAndSortedTournaments.length} of {tournaments.length} tournaments
-            </div>
-
-            {claimSuccess && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800"
-              >
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span className="font-medium">{claimSuccess}</span>
-                </div>
-              </motion.div>
             )}
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800"
-              >
-                <div className="flex items-center gap-2">
-                  <XCircle className="h-4 w-4" />
-                  <span className="font-medium">{error}</span>
-                </div>
-              </motion.div>
-            )}
-            <div className="space-y-3">
-              {filteredAndSortedTournaments.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p>No tournaments match the selected filters.</p>
-                  <p className="text-xs mt-2">Try adjusting your filter options.</p>
-                </div>
-              ) : (
-                filteredAndSortedTournaments.map((tournament) => {
-                  const claimablePolicy = getClaimablePolicyForTournament(tournament);
-                  const isClaiming = claimingPolicyId === claimablePolicy?.id;
 
-                  return (
-                    <motion.div
-                      key={tournament.id}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3 }}
-                      onClick={() => handleTournamentClick(tournament)}
-                      className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2 flex-wrap">
-                            <h3 className="font-semibold text-lg">{tournament.name}</h3>
-                            <Badge
-                              variant={tournament.status === "finished" ? "secondary" : "default"}
-                            >
-                              {tournament.status === "finished" ? "Finished" : "Upcoming"}
-                            </Badge>
-                            <Badge variant={tournament.isRegistered ? "default" : "outline"}>
-                              {tournament.isRegistered ? "Registered" : "Not Registered"}
-                            </Badge>
-                            {hasInsuranceForTournament(tournament) && (
-                              <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                                <Shield className="h-3 w-3 mr-1" />
-                                Insured
-                              </Badge>
-                            )}
-                            {claimablePolicy && (
-                              <Badge
-                                variant="default"
-                                className="bg-orange-600 hover:bg-orange-700"
-                              >
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Claimable
-                              </Badge>
-                            )}
-                            {isTournamentToday(tournament) &&
-                              tournament.status === "upcoming" &&
-                              tournament.isRegistered && (
-                                <Badge variant="default" className="bg-blue-600 hover:bg-blue-700">
-                                  <Play className="h-3 w-3 mr-1" />
-                                  Play Today
-                                </Badge>
-                              )}
-                            {isTournamentToday(tournament) &&
-                              tournament.status === "upcoming" &&
-                              !tournament.isRegistered && (
+            {/* Show error if deployment failed */}
+            {deploymentError && !isDeploying && (
+              <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                <XCircle className="h-8 w-8 text-destructive" />
+                <p className="text-destructive font-semibold">Deployment Error</p>
+                <p className="text-sm text-muted-foreground text-center">{deploymentError}</p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDeploymentError(null);
+                    localStorage.removeItem("poker_tournament_contract_address");
+                    window.location.reload();
+                  }}
+                >
+                  Retry Deployment
+                </Button>
+              </div>
+            )}
+
+            {/* Show tournament list only after deployment is complete */}
+            {!isDeploying && !deploymentError && (contractDeployed || !account) && (
+              <>
+                {/* Filters */}
+                <div className="mb-6 space-y-4 pb-4 border-b">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="text-sm font-semibold mb-2 block">Filter by Status</label>
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Status</SelectItem>
+                          <SelectItem value="finished">Finished</SelectItem>
+                          <SelectItem value="upcoming">Upcoming</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-semibold mb-2 block">
+                        Filter by Registration
+                      </label>
+                      <Select value={registrationFilter} onValueChange={setRegistrationFilter}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select registration" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Registration</SelectItem>
+                          <SelectItem value="registered">Registered</SelectItem>
+                          <SelectItem value="not-registered">Not Registered</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-semibold mb-2 block">
+                        Filter by Insurance
+                      </label>
+                      <Select value={insuranceFilter} onValueChange={setInsuranceFilter}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select insurance" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Insurance</SelectItem>
+                          <SelectItem value="insured">Insured</SelectItem>
+                          <SelectItem value="not-insured">Not Insured</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-4 text-sm text-muted-foreground">
+                  Showing {filteredAndSortedTournaments.length} of {tournaments.length} tournaments
+                </div>
+
+                {claimSuccess && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800"
+                  >
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="font-medium">{claimSuccess}</span>
+                    </div>
+                  </motion.div>
+                )}
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800"
+                  >
+                    <div className="flex items-center gap-2">
+                      <XCircle className="h-4 w-4" />
+                      <span className="font-medium">{error}</span>
+                    </div>
+                  </motion.div>
+                )}
+                <div className="space-y-3">
+                  {filteredAndSortedTournaments.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>No tournaments match the selected filters.</p>
+                      <p className="text-xs mt-2">Try adjusting your filter options.</p>
+                    </div>
+                  ) : (
+                    filteredAndSortedTournaments.map((tournament) => {
+                      const claimablePolicy = getClaimablePolicyForTournament(tournament);
+                      const isClaiming = claimingPolicyId === claimablePolicy?.id;
+
+                      return (
+                        <motion.div
+                          key={tournament.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.3 }}
+                          onClick={() => handleTournamentClick(tournament)}
+                          className="p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                <h3 className="font-semibold text-lg">{tournament.name}</h3>
                                 <Badge
-                                  variant="outline"
-                                  className="border-orange-500 text-orange-600"
+                                  variant={
+                                    tournament.status === "finished" ? "secondary" : "default"
+                                  }
                                 >
-                                  Register to Play
+                                  {tournament.status === "finished" ? "Finished" : "Upcoming"}
                                 </Badge>
-                              )}
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-4 w-4" />
-                              <span>{formatDate(tournament.date)}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Trophy className="h-4 w-4" />
-                              <span>{tournament.buyIn} tokens buy-in</span>
-                            </div>
-                            {tournament.status === "finished" && (
-                              <div className="flex items-center gap-1">
-                                <Users className="h-4 w-4" />
-                                <span>{tournament.totalPlayers} players</span>
+                                <Badge variant={tournament.isRegistered ? "default" : "outline"}>
+                                  {tournament.isRegistered ? "Registered" : "Not Registered"}
+                                </Badge>
+                                {hasInsuranceForTournament(tournament) && (
+                                  <Badge
+                                    variant="default"
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    <Shield className="h-3 w-3 mr-1" />
+                                    Insured
+                                  </Badge>
+                                )}
+                                {claimablePolicy && (
+                                  <Badge
+                                    variant="default"
+                                    className="bg-orange-600 hover:bg-orange-700"
+                                  >
+                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                    Claimable
+                                  </Badge>
+                                )}
+                                {isTournamentToday(tournament) &&
+                                  tournament.status === "upcoming" &&
+                                  tournament.isRegistered && (
+                                    <Badge
+                                      variant="default"
+                                      className="bg-blue-600 hover:bg-blue-700"
+                                    >
+                                      <Play className="h-3 w-3 mr-1" />
+                                      Play Today
+                                    </Badge>
+                                  )}
+                                {isTournamentToday(tournament) &&
+                                  tournament.status === "upcoming" &&
+                                  !tournament.isRegistered && (
+                                    <Badge
+                                      variant="outline"
+                                      className="border-orange-500 text-orange-600"
+                                    >
+                                      Register to Play
+                                    </Badge>
+                                  )}
                               </div>
-                            )}
-                            <div className="flex items-center gap-1">
-                              <Coins className="h-4 w-4" />
-                              <span>
-                                {calculateGuaranteedPrizePool(tournament).toLocaleString()} tokens
-                                prize pool
-                              </span>
-                            </div>
-                            {claimablePolicy && (
-                              <div className="flex items-center gap-1 text-green-600 font-semibold">
-                                <Shield className="h-4 w-4" />
-                                <span>Claim {Number(claimablePolicy.payout_amount)} tokens</span>
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="h-4 w-4" />
+                                  <span>{formatDate(tournament.date)}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Trophy className="h-4 w-4" />
+                                  <span>{tournament.buyIn} tokens buy-in</span>
+                                </div>
+                                {tournament.status === "finished" && (
+                                  <div className="flex items-center gap-1">
+                                    <Users className="h-4 w-4" />
+                                    <span>{tournament.totalPlayers} players</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <Coins className="h-4 w-4" />
+                                  <span>
+                                    {calculateGuaranteedPrizePool(tournament).toLocaleString()}{" "}
+                                    tokens prize pool
+                                  </span>
+                                </div>
+                                {claimablePolicy && (
+                                  <div className="flex items-center gap-1 text-green-600 font-semibold">
+                                    <Shield className="h-4 w-4" />
+                                    <span>
+                                      Claim {Number(claimablePolicy.payout_amount)} tokens
+                                    </span>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {isTournamentToday(tournament) &&
-                            tournament.status === "upcoming" &&
-                            tournament.isRegistered && (
-                              <Button
-                                variant="default"
-                                size="sm"
-                                onClick={(e) => handlePlayTournament(e, tournament)}
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
-                              >
-                                <Play className="h-4 w-4 mr-2" />
-                                Play
-                              </Button>
-                            )}
-                          {isTournamentToday(tournament) &&
-                            tournament.status === "upcoming" &&
-                            !tournament.isRegistered && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleTournamentClick(tournament)}
-                                className="border-orange-500 text-orange-600 hover:bg-orange-50"
-                              >
-                                Register to Play
-                              </Button>
-                            )}
-                          {claimablePolicy && (
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={(e) => handleClaimInsurance(e, tournament)}
-                              disabled={isClaiming || !account}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              {isClaiming ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Claiming...
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                                  Claim
-                                </>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {isTournamentToday(tournament) &&
+                                tournament.status === "upcoming" &&
+                                tournament.isRegistered && (
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={(e) => handlePlayTournament(e, tournament)}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                                  >
+                                    <Play className="h-4 w-4 mr-2" />
+                                    Play
+                                  </Button>
+                                )}
+                              {isTournamentToday(tournament) &&
+                                tournament.status === "upcoming" &&
+                                !tournament.isRegistered && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleTournamentClick(tournament)}
+                                    className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                                  >
+                                    Register to Play
+                                  </Button>
+                                )}
+                              {claimablePolicy && (
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={(e) => handleClaimInsurance(e, tournament)}
+                                  disabled={isClaiming || !account}
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  {isClaiming ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Claiming...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                                      Claim
+                                    </>
+                                  )}
+                                </Button>
                               )}
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="sm">
-                            View Details
-                          </Button>
-                        </div>
-                      </div>
-                    </motion.div>
-                  );
-                })
-              )}
-            </div>
+                              <Button variant="ghost" size="sm">
+                                View Details
+                              </Button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </motion.div>
