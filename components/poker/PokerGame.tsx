@@ -134,9 +134,11 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
       return;
     }
 
-    const newState = startNewHand(createInitialGameState(gameMode));
-    // Store initial balances at the start of each hand
-    initialBalancesRef.current = newState.players.map((p) => p.balance);
+    const initialState = createInitialGameState(gameMode);
+    // Store initial balances BEFORE paying blinds
+    initialBalancesRef.current = initialState.players.map((p) => p.balance);
+
+    const newState = startNewHand(initialState);
     setGameState(newState);
     setDealtCards(Array(5).fill(true));
     setShowNextHandButton(false);
@@ -190,7 +192,6 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
 
       // Check if betting round is complete BEFORE advancing
       // Store result to avoid checking again after advanceToNextRound resets playersToActInRound
-      console.log("handlebotturn")
       const bettingRoundComplete = isBettingRoundComplete(newState);
 
       if (bettingRoundComplete) {
@@ -237,7 +238,6 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
 
         // Check if betting round is complete BEFORE advancing
         // Store result to avoid checking again after advanceToNextRound resets playersToActInRound
-        console.log("handleplayeraction")
         const bettingRoundComplete = isBettingRoundComplete(newState);
 
         if (bettingRoundComplete) {
@@ -267,9 +267,10 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
   );
 
   const handleNextHand = useCallback(() => {
+    // Store initial balances BEFORE paying blinds
+    initialBalancesRef.current = gameState.players.map((p) => p.balance);
+
     const newState = startNewHand(gameState);
-    // Store initial balances at the start of each hand
-    initialBalancesRef.current = newState.players.map((p) => p.balance);
     setGameState(newState);
     setDealtCards(Array(5).fill(true));
     setShowNextHandButton(false);
@@ -304,16 +305,16 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
         const boardCards = cardsToString(gameState.communityCards);
 
         // Prepare player bets (total amount each player bet in this hand)
-        // The initial balance is saved AFTER blinds are posted, so we need to account for that
-        // Total bet = (initial balance - current balance) + currentBet
-        // The currentBet represents the bet in the current round that may not be fully reflected
+        // The initial balance is saved BEFORE blinds are posted
+        // Total bet = initial balance - current balance
+        // This captures all bets including blinds and subsequent betting rounds
         const playerBets = gameState.players.map((player, index) => {
           if (player.folded || !player.inGame) {
             console.log(`[PokerGame] Player ${index} is folded or not in game, returning 0`);
             return 0;
           }
 
-          // Get initial balance (saved after blinds, so it already accounts for blinds)
+          // Get initial balance (saved before blinds, so it includes the full starting balance)
           const initialBalance = initialBalancesRef.current[index];
           if (initialBalance === undefined) {
             // Fallback: use currentBet as estimate
@@ -321,16 +322,12 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
             return player.currentBet || 0;
           }
 
-          // Calculate balance difference (what they've bet so far)
+          // Calculate total bet: difference between initial balance and current balance
+          // This includes blinds and all subsequent bets
           console.log("[PokerGame] Balance of player", index, ":", player.balance);
           console.log("[PokerGame] Initial balance of player", index, ":", initialBalance);
           console.log("[PokerGame] player.currentBet:", player.currentBet);
-          const balanceDifference = initialBalance - player.balance;
-
-          // Add currentBet to capture the full bet amount
-          // currentBet represents the bet in the current/last round
-          // This ensures we capture all bets including the final round
-          const totalBet = balanceDifference + (player.currentBet || 0);
+          const totalBet = initialBalance - player.balance;
 
           return Math.max(0, totalBet);
         });

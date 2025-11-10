@@ -176,15 +176,6 @@ export class PokerTournament {
       totalBets: playerBets.reduce((a, b) => a + b, 0)
     });
     const client = this.getClient();
-    return {
-      hand_winner_index: -1,
-      tie_players: [],
-      is_tie: false,
-      pot_distributed: 0,
-      player_balances: [],
-      tournament_finished: false,
-      tournament_winner_index: -1,
-    };
     
     try {
       const txHash = await client.writeContract({
