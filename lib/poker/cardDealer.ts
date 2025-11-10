@@ -50,6 +50,33 @@ export function dealCommunityCards(deck: ICard[], count: number): {
 // Cooler scenarios: Player gets strong hand but loses
 const COOLER_SCENARIOS = [
   {
+    // Specific 3-player cooler scenario
+    // Player 1: K♥ Q♣ -> Full House (K full of 10)
+    // Player 2: A♦ K♣ -> Full House (K full of A)
+    // Player 3: 10♠ 10♦ -> Four of a Kind (10s)
+    playerHand: [
+      { suit: "♥", rank: "2" },
+      { suit: "♠", rank: "A" },
+    ],
+    botHands: [
+      [
+        { suit: "♠", rank: "10" },
+        { suit: "♣", rank: "10" },
+      ],
+      [
+        { suit: "♠", rank: "6" },
+        { suit: "♦", rank: "7" },
+      ],
+    ],
+    communityCards: [
+      { suit: "♣", rank: "A" },
+      { suit: "♠", rank: "2" },
+      { suit: "♦", rank: "2" },
+      { suit: "♦", rank: "10" },
+      { suit: "♥", rank: "10" },
+    ],
+  },
+  {
     playerHand: [
       { suit: "♠", rank: "K" },
       { suit: "♥", rank: "K" },
@@ -152,28 +179,42 @@ export function dealModeSpecificCards(
   }
 
   if (mode === "cooler") {
-    const scenario = COOLER_SCENARIOS[Math.floor(Math.random() * COOLER_SCENARIOS.length)];
-    const botHands: ICard[][] = [scenario.botHand];
-    for (let i = 1; i < numBots; i++) {
-      const deck = shuffleDeck(createDeck());
-      const usedCards = new Set<string>();
-      [
-        ...scenario.playerHand,
-        ...scenario.botHand,
-        ...scenario.communityCards,
-      ].forEach((card) => {
-        usedCards.add(`${card.suit}-${card.rank}`);
-      });
-      const available = deck.filter(
-        (card) => !usedCards.has(`${card.suit}-${card.rank}`)
-      );
-      botHands.push([available[0], available[1]]);
+    // Always use the first scenario (3-player specific cooler scenario)
+    const scenario = COOLER_SCENARIOS[0];
+    
+    // Check if scenario has botHands array (for 3-player specific scenarios)
+    if (scenario.botHands && Array.isArray(scenario.botHands)) {
+      return {
+        playerHand: scenario.playerHand,
+        botHands: scenario.botHands,
+        communityCards: scenario.communityCards,
+      };
     }
-    return {
-      playerHand: scenario.playerHand,
-      botHands,
-      communityCards: scenario.communityCards,
-    };
+    
+    // Fallback to old format with single botHand
+    if (scenario.botHand) {
+      const botHands: ICard[][] = [scenario.botHand];
+      for (let i = 1; i < numBots; i++) {
+        const deck = shuffleDeck(createDeck());
+        const usedCards = new Set<string>();
+        [
+          ...scenario.playerHand,
+          ...scenario.botHand,
+          ...scenario.communityCards,
+        ].forEach((card) => {
+          usedCards.add(`${card.suit}-${card.rank}`);
+        });
+        const available = deck.filter(
+          (card) => !usedCards.has(`${card.suit}-${card.rank}`)
+        );
+        botHands.push([available[0], available[1]]);
+      }
+      return {
+        playerHand: scenario.playerHand,
+        botHands,
+        communityCards: scenario.communityCards,
+      };
+    }
   }
 
   if (mode === "epic") {

@@ -249,12 +249,6 @@ export class PokerTournament {
     const tiePlayers = Array.isArray(result.tie_players) ? result.tie_players : [];
     const playerBalances = Array.isArray(result.player_balances) ? result.player_balances : [];
     
-    console.log("[PokerTournament] Winners calculated:", { 
-      winnerIndex: result.hand_winner_index ?? -1, 
-      isTie: result.is_tie ?? false,
-      tiePlayers: tiePlayers.length 
-    });
-    
     return {
       hand_winner_index: result.hand_winner_index ?? -1,
       tie_players: tiePlayers,
@@ -302,14 +296,12 @@ export class PokerTournament {
       throw new Error("Contract address is required. Please deploy the contract first.");
     }
 
-    console.log("[PokerTournament] Getting last winner info...");
     const client = this.getClient();
     const result = await client.readContract({
       address: this.contractAddress as Address,
       functionName: "get_last_winner",
       args: [],
     });
-    console.log("[PokerTournament] Last winner info retrieved");
     
     // Normalize and validate the result to ensure all fields exist
     const normalized = result as unknown as LastWinnerInfo;

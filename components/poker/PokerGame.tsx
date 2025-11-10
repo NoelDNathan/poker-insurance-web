@@ -359,16 +359,8 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
         // Call calculate_winners
         const result = await contract.calculateWinners(playerHands, boardCards, playerBets);
 
-        console.log("[PokerGame] Winners calculated, updating game state...");
-        console.log("[PokerGame] Result:", result);
-
         // Get last winner info to determine winners
-        console.log("[PokerGame] Getting last winner info...");
         const lastWinner = await contract.getLastWinner();
-        console.log(
-          "[PokerGame] Last winner info retrieved, winner index:",
-          lastWinner.hand_winner_index
-        );
 
         // Update game state with contract results and determine winners
         setGameState((prevState) => {
