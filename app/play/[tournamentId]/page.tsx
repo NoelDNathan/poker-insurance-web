@@ -44,10 +44,7 @@ export default function GameModeSelectionPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button
-                className="w-full"
-                onClick={() => handleModeSelect("normal")}
-              >
+              <Button className="w-full" onClick={() => handleModeSelect("normal")}>
                 Play Normal
               </Button>
             </CardContent>
@@ -64,7 +61,8 @@ export default function GameModeSelectionPage() {
               <Shield className="h-8 w-8 mb-2 text-orange-500" />
               <CardTitle>Loss by a Cooler</CardTitle>
               <CardDescription>
-                Experience a cooler situation - you'll get a strong hand but lose to an even stronger one (first hand only).
+                Experience a cooler situation - you&apos;ll get a strong hand but lose to an even
+                stronger one (first hand only).
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -105,4 +103,3 @@ export default function GameModeSelectionPage() {
     </div>
   );
 }
-

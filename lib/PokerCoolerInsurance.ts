@@ -2,6 +2,7 @@
 
 import { getClient, type Account } from "./genlayer";
 import type { Address } from "genlayer-js/types";
+import { TransactionStatus } from "genlayer-js/types";
 
 export interface InsurancePolicy {
   id: string;
@@ -68,7 +69,7 @@ export class PokerCoolerInsurance {
     });
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash,
-      status: "FINALIZED",
+      status: TransactionStatus.FINALIZED,
       interval: 10000,
       retries: 20,
     });
@@ -82,10 +83,16 @@ export class PokerCoolerInsurance {
       functionName: "get_tournament_info",
       args: [tournamentUrl],
     });
+    // Cast result to expected type (same pattern as PokerTournament.ts)
+    const normalized = result as unknown as {
+      tournament_buy_in: string | number | bigint;
+      insurance_premium: string | number | bigint;
+      payout_amount: string | number | bigint;
+    };
     return {
-      tournament_buy_in: BigInt(result.tournament_buy_in),
-      insurance_premium: BigInt(result.insurance_premium),
-      payout_amount: BigInt(result.payout_amount),
+      tournament_buy_in: BigInt(normalized.tournament_buy_in ?? 0),
+      insurance_premium: BigInt(normalized.insurance_premium ?? 0),
+      payout_amount: BigInt(normalized.payout_amount ?? 0),
     };
   }
 
@@ -133,7 +140,7 @@ export class PokerCoolerInsurance {
     });
     const receipt = await client.waitForTransactionReceipt({
       hash: txHash,
-      status: "FINALIZED",
+      status: TransactionStatus.FINALIZED,
       interval: 10000,
       retries: 20,
     });
@@ -147,7 +154,9 @@ export class PokerCoolerInsurance {
       functionName: "get_total_premiums",
       args: [],
     });
-    return BigInt(result);
+    // Cast result to a type compatible with BigInt
+    const value = result as unknown as string | number | bigint;
+    return BigInt(value ?? 0);
   }
 
   async getTotalPayouts(): Promise<bigint> {
@@ -157,23 +166,41 @@ export class PokerCoolerInsurance {
       functionName: "get_total_payouts",
       args: [],
     });
-    return BigInt(result);
+    // Cast result to a type compatible with BigInt
+    const value = result as unknown as string | number | bigint;
+    return BigInt(value ?? 0);
   }
 
-  private convertPolicy(policy: any): InsurancePolicy {
+  private convertPolicy(policy: unknown): InsurancePolicy {
+    // Cast policy to expected structure from contract
+    const rawPolicy = policy as {
+      id?: string;
+      player_address?: Address;
+      tournament_id?: string;
+      tournament_url?: string;
+      player_id?: string;
+      tournament_buy_in?: string | number | bigint;
+      premium_paid?: string | number | bigint;
+      has_claimed?: boolean;
+      claim_resolved?: boolean;
+      is_valid_cooler?: boolean;
+      payout_amount?: string | number | bigint;
+      registration_date?: string;
+    };
+    
     return {
-      id: policy.id || "",
-      player_address: policy.player_address,
-      tournament_id: policy.tournament_id || "",
-      tournament_url: policy.tournament_url || "",
-      player_id: policy.player_id || "",
-      tournament_buy_in: BigInt(policy.tournament_buy_in || 0),
-      premium_paid: BigInt(policy.premium_paid || 0),
-      has_claimed: policy.has_claimed || false,
-      claim_resolved: policy.claim_resolved || false,
-      is_valid_cooler: policy.is_valid_cooler || false,
-      payout_amount: BigInt(policy.payout_amount || 0),
-      registration_date: policy.registration_date || "",
+      id: rawPolicy.id || "",
+      player_address: rawPolicy.player_address as Address,
+      tournament_id: rawPolicy.tournament_id || "",
+      tournament_url: rawPolicy.tournament_url || "",
+      player_id: rawPolicy.player_id || "",
+      tournament_buy_in: BigInt(rawPolicy.tournament_buy_in || 0),
+      premium_paid: BigInt(rawPolicy.premium_paid || 0),
+      has_claimed: rawPolicy.has_claimed || false,
+      claim_resolved: rawPolicy.claim_resolved || false,
+      is_valid_cooler: rawPolicy.is_valid_cooler || false,
+      payout_amount: BigInt(rawPolicy.payout_amount || 0),
+      registration_date: rawPolicy.registration_date || "",
     };
   }
 }
