@@ -176,37 +176,102 @@ export class PokerTournament {
       totalBets: playerBets.reduce((a, b) => a + b, 0)
     });
     const client = this.getClient();
-    const txHash = await client.writeContract({
-      address: this.contractAddress as Address,
-      functionName: "calculate_winners",
-      args: [players, boardCards, playerBets],
-      value: BigInt(0),
-    });
-    console.log("[PokerTournament] calculate_winners transaction sent, hash:", txHash);
-    console.log("[PokerTournament] Waiting for calculate_winners transaction receipt...");
-    await client.waitForTransactionReceipt({
-      hash: txHash,
-      status: TransactionStatus.FINALIZED,
-      interval: 10000,
-      retries: 20,
-    });
-    console.log("[PokerTournament] calculate_winners transaction finalized, reading state...");
+    return {
+      hand_winner_index: -1,
+      tie_players: [],
+      is_tie: false,
+      pot_distributed: 0,
+      player_balances: [],
+      tournament_finished: false,
+      tournament_winner_index: -1,
+    };
+    
+    try {
+      const txHash = await client.writeContract({
+        address: this.contractAddress as Address,
+        functionName: "calculate_winners",
+        args: [players, boardCards, playerBets],
+        value: BigInt(0),
+      });
+      console.log("[PokerTournament] calculate_winners transaction sent, hash:", txHash);
+      console.log("[PokerTournament] Waiting for calculate_winners transaction receipt...");
+
+      try {
+        const receipt = await client.waitForTransactionReceipt({
+          hash: txHash,
+          status: TransactionStatus.FINALIZED,
+          interval: 10000,
+          retries: 20,
+        });
+        
+        // Verify transaction was successful
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const receiptAny = receipt as any;
+        const statusName = receiptAny.statusName || receiptAny.status_name;
+        const status = receiptAny.status;
+        
+        console.log("[PokerTournament] Transaction receipt received:", {
+          hash: txHash,
+          status: status,
+          statusName: statusName,
+          result: receiptAny.result,
+          resultName: receiptAny.result_name,
+        });
+        
+        // Verify that the transaction was successful
+        if (
+          statusName !== TransactionStatus.ACCEPTED &&
+          statusName !== TransactionStatus.FINALIZED
+        ) {
+          throw new Error(`Transaction failed with status: ${statusName}. Receipt: ${JSON.stringify(receipt)}`);
+        }
+        
+        // Verify the execution result
+        if (receiptAny.result_name && receiptAny.result_name !== "MAJORITY_AGREE") {
+          console.warn(`[PokerTournament] Transaction result: ${receiptAny.result_name} (expected MAJORITY_AGREE)`);
+        }
+        
+        console.log("[PokerTournament] calculate_winners transaction finalized successfully");
+      } catch (waitError: unknown) {
+        const errorMessage = waitError instanceof Error ? waitError.message : String(waitError);
+        console.error("[PokerTournament] Transaction failed or timed out:", errorMessage);
+        throw new Error(`Transaction failed or timed out: ${errorMessage}`);
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('insufficient funds')) {
+        console.error("[PokerTournament] Not enough balance to pay for transaction");
+        throw new Error('Not enough balance to pay for transaction');
+      } else if (errorMessage.includes('user rejected')) {
+        console.error("[PokerTournament] User rejected the transaction");
+        throw new Error('User rejected the transaction');
+      } else {
+        console.error("[PokerTournament] Error sending transaction:", errorMessage);
+        throw error;
+      }
+    }
     
     // The result is in the receipt, but we need to read the state to get the full result
     const result = await this.getState();
+    
+    // Validate and normalize the result
+    const tiePlayers = Array.isArray(result.tie_players) ? result.tie_players : [];
+    const playerBalances = Array.isArray(result.player_balances) ? result.player_balances : [];
+    
     console.log("[PokerTournament] Winners calculated:", { 
-      winnerIndex: result.hand_winner_index, 
-      isTie: result.is_tie,
-      tiePlayers: result.tie_players.length 
+      winnerIndex: result.hand_winner_index ?? -1, 
+      isTie: result.is_tie ?? false,
+      tiePlayers: tiePlayers.length 
     });
+    
     return {
-      hand_winner_index: result.hand_winner_index,
-      tie_players: result.tie_players,
-      is_tie: result.is_tie,
-      pot_distributed: result.pot,
-      player_balances: result.player_balances,
-      tournament_finished: result.tournament_finished,
-      tournament_winner_index: result.tournament_winner_index,
+      hand_winner_index: result.hand_winner_index ?? -1,
+      tie_players: tiePlayers,
+      is_tie: result.is_tie ?? false,
+      pot_distributed: result.pot ?? 0,
+      player_balances: playerBalances,
+      tournament_finished: result.tournament_finished ?? false,
+      tournament_winner_index: result.tournament_winner_index ?? -1,
     };
   }
 
@@ -215,15 +280,30 @@ export class PokerTournament {
       throw new Error("Contract address is required. Please deploy the contract first.");
     }
 
-    console.log("[PokerTournament] Reading contract state...");
+    console.log("[PokerTournament] Reading contract state... contractAddress:", this.contractAddress);
     const client = this.getClient();
     const result = await client.readContract({
       address: this.contractAddress as Address,
       functionName: "get_state",
       args: [],
     });
-    console.log("[PokerTournament] State read successfully");
-    return result as unknown as TournamentState;
+    console.log("[PokerTournament] State read successfully:", result);
+    
+    // Normalize and validate the result to ensure all fields exist
+    const normalized = result as unknown as TournamentState;
+    return {
+      player_balances: Array.isArray(normalized?.player_balances) ? normalized.player_balances : [],
+      player_addresses: Array.isArray(normalized?.player_addresses) ? normalized.player_addresses : [],
+      player_hands: Array.isArray(normalized?.player_hands) ? normalized.player_hands : [],
+      board_cards: normalized?.board_cards ?? "",
+      pot: normalized?.pot ?? 0,
+      hand_winner_index: normalized?.hand_winner_index ?? -1,
+      tie_players: Array.isArray(normalized?.tie_players) ? normalized.tie_players : [],
+      is_tie: normalized?.is_tie ?? false,
+      last_pot_distribution: Array.isArray(normalized?.last_pot_distribution) ? normalized.last_pot_distribution : [],
+      tournament_finished: normalized?.tournament_finished ?? false,
+      tournament_winner_index: normalized?.tournament_winner_index ?? -1,
+    };
   }
 
   async getLastWinner(): Promise<LastWinnerInfo> {
@@ -239,7 +319,18 @@ export class PokerTournament {
       args: [],
     });
     console.log("[PokerTournament] Last winner info retrieved");
-    return result as unknown as LastWinnerInfo;
+    
+    // Normalize and validate the result to ensure all fields exist
+    const normalized = result as unknown as LastWinnerInfo;
+    return {
+      player_hands: Array.isArray(normalized?.player_hands) ? normalized.player_hands : [],
+      board_cards: normalized?.board_cards ?? "",
+      hand_winner_index: normalized?.hand_winner_index ?? -1,
+      tie_players: Array.isArray(normalized?.tie_players) ? normalized.tie_players : [],
+      is_tie: normalized?.is_tie ?? false,
+      tournament_finished: normalized?.tournament_finished ?? false,
+      tournament_winner_index: normalized?.tournament_winner_index ?? -1,
+    };
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

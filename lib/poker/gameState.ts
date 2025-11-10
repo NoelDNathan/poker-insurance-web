@@ -72,30 +72,6 @@ export const createInitialGameState = (
       folded: false,
       hand: [],
     },
-    {
-      id: 3,
-      name: "Bot 3",
-      isHuman: false,
-      chair: 3,
-      balance: 1000,
-      currentBet: 0,
-      inGame: true,
-      isAllIn: false,
-      folded: false,
-      hand: [],
-    },
-    {
-      id: 4,
-      name: "Bot 4",
-      isHuman: false,
-      chair: 4,
-      balance: 1000,
-      currentBet: 0,
-      inGame: true,
-      isAllIn: false,
-      folded: false,
-      hand: [],
-    },
   ];
 
   return {

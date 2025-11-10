@@ -151,6 +151,7 @@ export function processPlayerAction(
       player.currentBet += callAmount;
       newState.pot += callAmount;
       newState.playersToActInRound--;
+      console.log("[Check] newState.playersToActInRound:", newState.playersToActInRound);
       if (player.balance === 0) {
         player.isAllIn = true;
       }
@@ -168,10 +169,11 @@ export function processPlayerAction(
       newState.currentBet = raiseAmount;
       // Reset counter when someone raises - all active players need to act again
       newState.playersToActInRound = newState.players.filter(
-        (p) => !p.folded && p.inGame && !p.isAllIn
+        (p) => !p.folded && p.inGame && (p.currentBet < raiseAmount && !p.isAllIn)
+        // (p) => !p.folded && p.inGame && !p.isAllIn
       ).length;
+      console.log("[Raise] newState.playersToActInRound:", newState.playersToActInRound);
       // Decrement because the raiser just acted
-      newState.playersToActInRound--;
       if (player.balance === 0) {
         player.isAllIn = true;
       }
@@ -182,7 +184,7 @@ export function processPlayerAction(
 }
 
 export function advanceToNextRound(gameState: GameState): GameState {
-  let newState = { ...gameState };
+  const newState = { ...gameState };
 
   if (newState.currentRound === "preflop") {
     newState.currentRound = "flop";
@@ -233,8 +235,10 @@ export function advanceToNextRound(gameState: GameState): GameState {
     newState.playersToActInRound = newState.players.filter(
       (p) => !p.folded && p.inGame && !p.isAllIn
     ).length;
+    console.log("[advanceToNextRound] newState.playersToActInRound:", newState.playersToActInRound);
     // Start from player after dealer, but find the first active player
     newState.currentTurnIndex = (newState.dealerPosition + 1) % newState.players.length;
+    console.log("[advanceToNextRound] newState.currentTurnIndex:", newState.currentTurnIndex);
     const nextActive = getNextActivePlayerIndexFromPosition(newState, newState.dealerPosition);
     if (nextActive >= 0) {
       newState.currentTurnIndex = nextActive;
@@ -253,10 +257,7 @@ export function advanceToNextRound(gameState: GameState): GameState {
       const { cards } = dealCommunityCards(available, 1);
       newState.communityCards.push(cards[0]);
     }
-    newState.currentBet = 0;
-    newState.players.forEach((p) => {
-      p.currentBet = 0;
-    });
+
     // Reset counter: number of active players (not all-in) that need to act
     newState.playersToActInRound = newState.players.filter(
       (p) => !p.folded && p.inGame && !p.isAllIn
@@ -265,21 +266,28 @@ export function advanceToNextRound(gameState: GameState): GameState {
     newState.currentTurnIndex = (newState.dealerPosition + 1) % newState.players.length;
     const nextActive = getNextActivePlayerIndexFromPosition(newState, newState.dealerPosition);
     if (nextActive >= 0) {
+      newState.currentBet = 0;
+      newState.players.forEach((p) => {
+        p.currentBet = 0;
+      });
       newState.currentTurnIndex = nextActive;
     }
   } else if (newState.currentRound === "river") {
     newState.currentRound = "showdown";
-    newState = determineWinners(newState);
+    // Don't determine winners here - wait for contract to calculate winners
+    // Winners will be determined after contract calculates them
+    newState.isHandComplete = true; // Will be set to true after contract calculation
   }
 
   return newState;
 }
 
-function determineWinners(gameState: GameState): GameState {
-  let newState = { ...gameState };
+export function determineWinners(gameState: GameState, skipPotDistribution: boolean = false): GameState {
+  const newState = { ...gameState };
   const activePlayers = newState.players.filter((p) => !p.folded && p.inGame);
 
   if (activePlayers.length === 0) {
+    newState.isHandComplete = true;
     return newState;
   }
 
@@ -296,15 +304,19 @@ function determineWinners(gameState: GameState): GameState {
     .map((e) => e.playerIndex);
 
   newState.winners = winners;
-  const potPerWinner = Math.floor(newState.pot / winners.length);
-  const remainder = newState.pot % winners.length;
+  
+  // Only distribute pot if not already distributed by contract
+  if (!skipPotDistribution) {
+    const potPerWinner = Math.floor(newState.pot / winners.length);
+    const remainder = newState.pot % winners.length;
 
-  winners.forEach((winnerId, index) => {
-    const winner = newState.players.find((p) => p.id === winnerId);
-    if (winner) {
-      winner.balance += potPerWinner + (index < remainder ? 1 : 0);
-    }
-  });
+    winners.forEach((winnerId, index) => {
+      const winner = newState.players.find((p) => p.id === winnerId);
+      if (winner) {
+        winner.balance += potPerWinner + (index < remainder ? 1 : 0);
+      }
+    });
+  }
 
   newState.isHandComplete = true;
   return newState;
@@ -312,26 +324,24 @@ function determineWinners(gameState: GameState): GameState {
 
 export function isBettingRoundComplete(gameState: GameState): boolean {
   const activePlayers = gameState.players.filter(
-    (p) => !p.folded && p.inGame && !p.isAllIn
+    (p) => !p.folded && (p.inGame || p.isAllIn)
   );
 
   if (activePlayers.length <= 1) {
     return true;
   }
 
+  console.log("[isBettingRoundComplete] gameState.playersToActInRound:", gameState.playersToActInRound);
+  console.log("[isBettingRoundComplete] activePlayers.length:", activePlayers.length);
   // Round is complete when counter reaches 0 (all active players have acted)
+  console.log("[isBettingRoundComplete]:", gameState.playersToActInRound <= 0);
   return gameState.playersToActInRound <= 0;
 }
 
 // Helper function to find next active player from a given position
 function getNextActivePlayerIndexFromPosition(gameState: GameState, startIndex: number): number {
-  const activePlayers = gameState.players.filter(
-    (p) => !p.folded && p.inGame && !p.isAllIn
-  );
-
-  if (activePlayers.length <= 1) {
-    return -1;
-  }
+  console.log("[getNextActivePlayerIndexFromPosition] startIndex:", startIndex);
+  console.log("[getNextActivePlayerIndexFromPosition] gameState.players:", gameState.players);
 
   let currentIndex = startIndex;
   for (let i = 0; i < gameState.players.length; i++) {
