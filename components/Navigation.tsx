@@ -20,14 +20,6 @@ export function Navigation() {
             </Link>
             <div className="flex gap-4">
               <Link
-                href="/purchase"
-                className={`text-sm font-medium transition-colors hover:text-primary ${
-                  pathname === "/purchase" ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
-                Purchase
-              </Link>
-              <Link
                 href="/tournament"
                 className={`text-sm font-medium transition-colors hover:text-primary ${
                   pathname === "/tournament" ? "text-primary" : "text-muted-foreground"

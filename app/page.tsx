@@ -13,24 +13,8 @@ export default function Home() {
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6 w-full max-w-4xl mt-8">
-        <Card>
-          <CardHeader>
-            <Shield className="h-8 w-8 mb-2 text-primary" />
-            <CardTitle>Purchase Insurance</CardTitle>
-            <CardDescription>
-              Buy insurance for your poker tournament participation
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/purchase">
-              <Button className="w-full">
-                Get Started <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
+      <div className="w-full max-w-4xl mt-8">
+        
         <Card>
           <CardHeader>
             <FileText className="h-8 w-8 mb-2 text-primary" />

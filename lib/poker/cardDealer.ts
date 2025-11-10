@@ -76,6 +76,9 @@ const COOLER_SCENARIOS = [
       { suit: "♥", rank: "10" },
     ],
   },
+  
+  // ["♥2♠A", "♠10♣10", "♠6♦7"]
+  // "♣A♠2♦2♦10♥10"
   {
     playerHand: [
       { suit: "♠", rank: "K" },

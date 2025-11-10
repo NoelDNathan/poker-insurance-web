@@ -38,6 +38,7 @@ export interface Tournament {
   date: string;
   status: "finished" | "upcoming";
   isRegistered: boolean;
+  isPlayed: boolean;
   tournamentUrl: string;
   buyIn: number;
   premium: number;
@@ -45,6 +46,8 @@ export interface Tournament {
   format: string;
   totalPlayers: number;
   guaranteedPrizePool?: number;
+  tournamentContractAddress: string | null;
+  hasClaimed: boolean;
 }
 
 // Helper function to get future dates
@@ -72,6 +75,9 @@ const initialTournaments: Tournament[] = [
     payout: 50,
     format: "No-Limit Hold'em",
     totalPlayers: 150,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-002",
@@ -85,6 +91,9 @@ const initialTournaments: Tournament[] = [
     payout: 100,
     format: "No-Limit Hold'em",
     totalPlayers: 0,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-003",
@@ -98,6 +107,9 @@ const initialTournaments: Tournament[] = [
     payout: 250,
     format: "No-Limit Hold'em",
     totalPlayers: 0,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-004",
@@ -111,6 +123,9 @@ const initialTournaments: Tournament[] = [
     payout: 75,
     format: "No-Limit Hold'em",
     totalPlayers: 200,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-005",
@@ -124,6 +139,9 @@ const initialTournaments: Tournament[] = [
     payout: 37.5,
     format: "No-Limit Hold'em",
     totalPlayers: 0,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-006",
@@ -137,6 +155,9 @@ const initialTournaments: Tournament[] = [
     payout: 60,
     format: "No-Limit Hold'em",
     totalPlayers: 180,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-007",
@@ -150,6 +171,9 @@ const initialTournaments: Tournament[] = [
     payout: 40,
     format: "No-Limit Hold'em",
     totalPlayers: 0,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-008",
@@ -163,6 +187,9 @@ const initialTournaments: Tournament[] = [
     payout: 150,
     format: "No-Limit Hold'em",
     totalPlayers: 0,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-009",
@@ -176,6 +203,9 @@ const initialTournaments: Tournament[] = [
     payout: 45,
     format: "No-Limit Hold'em",
     totalPlayers: 175,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-010",
@@ -189,6 +219,9 @@ const initialTournaments: Tournament[] = [
     payout: 125,
     format: "No-Limit Hold'em",
     totalPlayers: 0,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-011",
@@ -202,6 +235,9 @@ const initialTournaments: Tournament[] = [
     payout: 25,
     format: "No-Limit Hold'em",
     totalPlayers: 0,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-012",
@@ -215,6 +251,9 @@ const initialTournaments: Tournament[] = [
     payout: 50,
     format: "No-Limit Hold'em",
     totalPlayers: 0,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
   {
     id: "tournament-013",
@@ -228,6 +267,9 @@ const initialTournaments: Tournament[] = [
     payout: 37.5,
     format: "No-Limit Hold'em",
     totalPlayers: 0,
+    isPlayed: false,
+    tournamentContractAddress: null,
+    hasClaimed: false,
   },
 ];
 
@@ -244,10 +286,10 @@ export function TournamentDetails() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [policies, setPolicies] = useState<Record<string, InsurancePolicy>>({});
   const [, setLoadingPolicies] = useState(false);
-  const [claimingPolicyId, setClaimingPolicyId] = useState<string | null>(null);
+  const [isClaimingPolicy, setIsClaimingPolicy] = useState<boolean>(false);
   const [claimSuccess, setClaimSuccess] = useState<string | null>(null);
+
   // Load tournaments state from localStorage on mount
   const loadTournamentsState = (): Tournament[] => {
     if (typeof window === "undefined") return initialTournaments;
@@ -259,7 +301,12 @@ export function TournamentDetails() {
         return initialTournaments.map((initial) => {
           const storedTournament = parsed.find((t: Tournament) => t.id === initial.id);
           return storedTournament
-            ? { ...initial, ...storedTournament, tournamentUrl: initial.tournamentUrl }
+            ? {
+                ...initial,
+                ...storedTournament,
+                tournamentUrl: initial.tournamentUrl,
+                isPlayed: storedTournament.isPlayed ?? false,
+              }
             : initial;
         });
       }
@@ -301,16 +348,66 @@ export function TournamentDetails() {
     return contracts;
   };
 
-  const [tournaments, setTournaments] = useState<Tournament[]>(loadTournamentsState);
+  // Load policies from localStorage on mount
+  const loadPoliciesFromStorage = (): Record<string, InsurancePolicy> => {
+    if (typeof window === "undefined") return {};
+    try {
+      const stored = localStorage.getItem("policies_state");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Convert BigInt strings back to BigInt
+        const policies: Record<string, InsurancePolicy> = {};
+        for (const [key, value] of Object.entries(parsed)) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const policy = value as any;
+          policies[key] = {
+            ...policy,
+            tournament_buy_in: BigInt(policy.tournament_buy_in || "0"),
+            premium_paid: BigInt(policy.premium_paid || "0"),
+            payout_amount: BigInt(policy.payout_amount || "0"),
+          };
+        }
+        return policies;
+      }
+    } catch (error) {
+      console.error("Error loading policies from storage:", error);
+    }
+    return {};
+  };
+
+  // Save policies to localStorage
+  const savePoliciesToStorage = (policiesToSave: Record<string, InsurancePolicy>) => {
+    if (typeof window === "undefined") return;
+    try {
+      // Convert BigInt to strings for JSON serialization
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const serializable: Record<string, any> = {};
+      for (const [key, policy] of Object.entries(policiesToSave)) {
+        serializable[key] = {
+          ...policy,
+          tournament_buy_in: policy.tournament_buy_in.toString(),
+          premium_paid: policy.premium_paid.toString(),
+          payout_amount: policy.payout_amount.toString(),
+        };
+      }
+      localStorage.setItem("policies_state", JSON.stringify(serializable));
+    } catch (error) {
+      console.error("Error saving policies to storage:", error);
+    }
+  };
+
+  const [tournaments, setTournaments] = useState<Tournament[]>(initialTournaments);
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentError, setDeploymentError] = useState<string | null>(null);
   const [contractDeployed, setContractDeployed] = useState(false);
   const [deployedContractAddress, setDeployedContractAddress] = useState<string | null>(null);
   // Map to store contract addresses per tournament
-  const [tournamentContracts, setTournamentContracts] =
-    useState<Record<string, string>>(loadTournamentContracts);
+  const [tournamentContracts, setTournamentContracts] = useState<Record<string, string>>({});
   // Map to store insurance status per tournament
-  const [hasInsuranceMap, setHasInsuranceMap] = useState<Record<string, boolean>>(loadInsuranceMap);
+  const [hasInsuranceMap, setHasInsuranceMap] = useState<Record<string, boolean>>({});
+  // Policies state - initialized from localStorage
+  const [policies, setPolicies] =
+    useState<Record<string, InsurancePolicy>>(loadPoliciesFromStorage);
 
   // Filter states - using strings for Select (single selection or "all")
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -431,6 +528,8 @@ export function TournamentDetails() {
       }
 
       setPolicies(loadedPolicies);
+      // Save policies to localStorage
+      savePoliciesToStorage(loadedPolicies);
       // Update insurance map after loading policies
       // Preserve manual updates when reloading (e.g., after purchasing insurance)
       updateInsuranceMap(loadedPolicies, true);
@@ -439,6 +538,8 @@ export function TournamentDetails() {
       // On error, use default mock policies
       const mockPolicies = getDefaultMockPolicies(accountAddress);
       setPolicies(mockPolicies);
+      // Save policies to localStorage
+      savePoliciesToStorage(mockPolicies);
       updateInsuranceMap(mockPolicies, true);
     } finally {
       setLoadingPolicies(false);
@@ -451,6 +552,36 @@ export function TournamentDetails() {
     getDefaultMockPolicies,
     updateInsuranceMap,
   ]);
+
+  // Load state from localStorage on mount
+  useEffect(() => {
+    // Load tournaments state
+    const loadedTournaments = loadTournamentsState();
+    setTournaments(loadedTournaments);
+
+    // Load insurance map
+    const loadedInsuranceMap = loadInsuranceMap();
+    setHasInsuranceMap(loadedInsuranceMap);
+
+    // Load tournament contracts
+    const loadedContracts = loadTournamentContracts();
+    setTournamentContracts(loadedContracts);
+
+    // Load policies from localStorage (will be overridden by loadPolicies if account is connected)
+    const loadedPolicies = loadPoliciesFromStorage();
+    if (Object.keys(loadedPolicies).length > 0) {
+      setPolicies(loadedPolicies);
+      // Update insurance map based on loaded policies
+      const newInsuranceMap: Record<string, boolean> = {};
+      loadedTournaments.forEach((tournament) => {
+        const hasInsurance = Object.values(loadedPolicies).some(
+          (policy) => policy.tournament_id === tournament.id
+        );
+        newInsuranceMap[tournament.id] = hasInsurance;
+      });
+      setHasInsuranceMap((prev) => ({ ...prev, ...newInsuranceMap }));
+    }
+  }, []);
 
   useEffect(() => {
     loadPolicies();
@@ -593,7 +724,40 @@ export function TournamentDetails() {
         try {
           localStorage.setItem(
             "tournaments_state",
-            JSON.stringify(updated.map((t) => ({ id: t.id, isRegistered: t.isRegistered })))
+            JSON.stringify(
+              updated.map((t) => ({
+                id: t.id,
+                isRegistered: t.isRegistered,
+                isPlayed: t.isPlayed ?? false,
+              }))
+            )
+          );
+        } catch (error) {
+          console.error("Error saving tournaments state:", error);
+        }
+      }
+      return updated;
+    });
+  };
+
+  // Function to update tournament played status
+  const updateTournamentPlayed = (tournamentId: string, isPlayed: boolean) => {
+    setTournaments((prevTournaments) => {
+      const updated = prevTournaments.map((tournament) =>
+        tournament.id === tournamentId ? { ...tournament, isPlayed } : tournament
+      );
+      // Persist to localStorage
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem(
+            "tournaments_state",
+            JSON.stringify(
+              updated.map((t) => ({
+                id: t.id,
+                isRegistered: t.isRegistered,
+                isPlayed: t.isPlayed ?? false,
+              }))
+            )
           );
         } catch (error) {
           console.error("Error saving tournaments state:", error);
@@ -604,15 +768,11 @@ export function TournamentDetails() {
   };
 
   const getClaimablePolicyForTournament = (tournament: Tournament): InsurancePolicy | null => {
-    if (!policies || Object.keys(policies).length === 0) return null;
+    if (!tournament.isPlayed) return null; // Check if tournament has been played
 
-    const policy = Object.values(policies).find((policy) => {
-      return (
-        policy.tournament_id === tournament.id && policy.is_valid_cooler && !policy.has_claimed
-      );
-    });
-
-    return policy || null;
+    // Return the first policy found in policies
+    const policyValues = Object.values(policies);
+    return policyValues.length > 0 ? policyValues[0] : null;
   };
 
   const handleClaimInsurance = async (e: React.MouseEvent, tournament: Tournament) => {
@@ -629,7 +789,7 @@ export function TournamentDetails() {
       return;
     }
 
-    setClaimingPolicyId(policy.id);
+    setIsClaimingPolicy(true);
     setError(null);
     setClaimSuccess(null);
 
@@ -638,7 +798,7 @@ export function TournamentDetails() {
       await contract.fileClaim(policy.id);
 
       // Add payout to balance
-      const payoutAmount = Number(policy.payout_amount);
+      const payoutAmount = Number(50);
       addBalance(payoutAmount);
 
       // Update policy status in local state immediately
@@ -651,6 +811,13 @@ export function TournamentDetails() {
             claim_resolved: true,
           };
         }
+        setTournaments((prevTournaments) => {
+          return prevTournaments.map((_tournament) =>
+            _tournament.id === tournament.id ? { ..._tournament, hasClaimed: true } : _tournament
+          );
+        });
+        // Save updated policies to localStorage
+        savePoliciesToStorage(updatedPolicies);
         return updatedPolicies;
       });
 
@@ -667,7 +834,7 @@ export function TournamentDetails() {
       setError(err instanceof Error ? err.message : "Failed to file claim");
       setClaimSuccess(null);
     } finally {
-      setClaimingPolicyId(null);
+      setIsClaimingPolicy(false);
     }
   };
 
@@ -729,7 +896,47 @@ export function TournamentDetails() {
   };
 
   // Callback to update tournament when insurance is purchased in dialog
-  const handleInsurancePurchased = async (tournamentId: string) => {
+  const handleInsurancePurchased = async (
+    tournamentId: string,
+    tournamentContractAddress: string,
+    registrationDate: string,
+    playerAddress: string
+  ) => {
+    // Find the tournament to get its details
+    const tournament = tournaments.find((t) => t.id === tournamentId);
+    if (!tournament) {
+      console.error("Tournament not found:", tournamentId);
+      return;
+    }
+
+    // Create a new policy object
+    const policyId = `policy-${tournamentId}-${Date.now()}`;
+    const newPolicy: InsurancePolicy = {
+      id: policyId,
+      player_address: playerAddress as Address,
+      tournament_id: tournamentContractAddress, // Use contract address as tournament_id
+      tournament_url: tournament.tournamentUrl,
+      player_id: playerAddress,
+      tournament_buy_in: BigInt(tournament.buyIn),
+      premium_paid: BigInt(tournament.premium),
+      has_claimed: false,
+      claim_resolved: false,
+      is_valid_cooler: false, // Will be determined when checking claim
+      payout_amount: BigInt(tournament.payout),
+      registration_date: registrationDate,
+    };
+
+    // Add policy to policies state immediately and save to localStorage
+    setPolicies((prevPolicies) => {
+      const updatedPolicies = {
+        ...prevPolicies,
+        [policyId]: newPolicy,
+      };
+      // Save to localStorage immediately
+      savePoliciesToStorage(updatedPolicies);
+      return updatedPolicies;
+    });
+
     // Update insurance map immediately for the specific tournament
     setHasInsuranceMap((prev) => {
       const updated = {
@@ -747,10 +954,11 @@ export function TournamentDetails() {
       return updated;
     });
 
-    // Wait a bit for the transaction to be confirmed, then reload policies
-    // This gives the blockchain time to process the transaction
+    // Wait a bit for the transaction to be confirmed, then reload policies from contract
+    // This ensures we have the latest state from the blockchain
     setTimeout(async () => {
       await loadPolicies();
+      // Policies are automatically saved to localStorage in loadPolicies
     }, 2000); // Wait 2 seconds before reloading
   };
 
@@ -784,6 +992,9 @@ export function TournamentDetails() {
       setError("Contract address not available. Please wait for contract deployment.");
       return;
     }
+
+    // Mark tournament as played
+    updateTournamentPlayed(tournament.id, true);
 
     // Store the contract address for this tournament in localStorage so PokerGame can use it
     localStorage.setItem(`tournament_contract_${tournament.id}`, contractAddress);
@@ -966,8 +1177,9 @@ export function TournamentDetails() {
                     </div>
                   ) : (
                     filteredAndSortedTournaments.map((tournament) => {
-                      const claimablePolicy = getClaimablePolicyForTournament(tournament);
-                      const isClaiming = claimingPolicyId === claimablePolicy?.id;
+                      const isClaimable = tournament.isPlayed && !tournament.hasClaimed;
+                     
+                      const isClaiming = isClaimingPolicy;
 
                       return (
                         <motion.div
@@ -1001,7 +1213,7 @@ export function TournamentDetails() {
                                     Insured
                                   </Badge>
                                 )}
-                                {claimablePolicy && (
+                                {isClaimable && (
                                   <Badge
                                     variant="default"
                                     className="bg-orange-300 hover:bg-orange-400"
@@ -1010,9 +1222,19 @@ export function TournamentDetails() {
                                     Claimable
                                   </Badge>
                                 )}
+                                {tournament.hasClaimed && (
+                                  <Badge
+                                    variant="default"
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                    Claimed
+                                  </Badge>
+                                )}
                                 {isTournamentToday(tournament) &&
                                   tournament.status === "upcoming" &&
-                                  tournament.isRegistered && (
+                                  tournament.isRegistered &&
+                                  !tournament.isPlayed && (
                                     <Badge
                                       variant="default"
                                       className="bg-blue-600 hover:bg-blue-700 text-white"
@@ -1054,20 +1276,13 @@ export function TournamentDetails() {
                                     tokens prize pool
                                   </span>
                                 </div>
-                                {claimablePolicy && (
-                                  <div className="flex items-center gap-1 text-green-600 font-semibold">
-                                    <Shield className="h-4 w-4" />
-                                    <span>
-                                      Claim {Number(claimablePolicy.payout_amount)} tokens
-                                    </span>
-                                  </div>
-                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               {isTournamentToday(tournament) &&
                                 tournament.status === "upcoming" &&
-                                tournament.isRegistered && (
+                                tournament.isRegistered &&
+                                !tournament.isPlayed && (
                                   <Button
                                     variant="default"
                                     size="sm"
@@ -1090,7 +1305,7 @@ export function TournamentDetails() {
                                     Register to Play
                                   </Button>
                                 )}
-                              {claimablePolicy && (
+                              {isClaimable && (
                                 <Button
                                   variant="default"
                                   size="sm"
@@ -1130,12 +1345,28 @@ export function TournamentDetails() {
       {selectedTournament && (
         <TournamentDialog
           tournament={tournaments.find((t) => t.id === selectedTournament.id) || selectedTournament}
+          onPlay={() => {
+            const fakeEvent = { stopPropagation: () => {} } as React.MouseEvent;
+            handlePlayTournament(fakeEvent, selectedTournament);
+          }}
           open={isDialogOpen}
           onOpenChange={handleDialogClose}
           onRegistered={(tournamentId, contractAddress) =>
             handleTournamentRegistered(tournamentId, contractAddress)
           }
-          onInsurancePurchased={(tournamentId) => handleInsurancePurchased(tournamentId)}
+          onInsurancePurchased={(
+            tournamentId,
+            tournamentContractAddress,
+            registrationDate,
+            playerAddress
+          ) =>
+            handleInsurancePurchased(
+              tournamentId,
+              tournamentContractAddress,
+              registrationDate,
+              playerAddress
+            )
+          }
           tournamentContractAddress={
             tournamentContracts[selectedTournament.id] || deployedContractAddress
           }

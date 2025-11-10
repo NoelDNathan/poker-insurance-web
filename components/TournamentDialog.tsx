@@ -34,7 +34,13 @@ interface TournamentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onRegistered?: (tournamentId: string, contractAddress?: string) => void;
-  onInsurancePurchased?: (tournamentId: string) => void;
+  onInsurancePurchased?: (
+    tournamentId: string,
+    tournamentContractAddress: string,
+    registrationDate: string,
+    playerAddress: string
+  ) => void;
+  onPlay?: () => void;
   tournamentContractAddress?: string | null;
   hasInsurance?: boolean;
 }
@@ -42,6 +48,7 @@ interface TournamentDialogProps {
 export function TournamentDialog({
   tournament,
   open,
+  onPlay,
   onOpenChange,
   onRegistered,
   onInsurancePurchased,
@@ -119,6 +126,9 @@ export function TournamentDialog({
   const handlePlayTournament = () => {
     // TODO: Implement tournament play functionality
     console.log("Play tournament:", tournament.id);
+    if (onPlay) {
+      onPlay();
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -253,9 +263,14 @@ export function TournamentDialog({
       // Close insurance prompt dialog
       setShowInsurancePrompt(false);
 
-      // Notify parent component to reload policies
+      // Notify parent component to add policy and reload policies
       if (onInsurancePurchased) {
-        onInsurancePurchased(tournament.id);
+        onInsurancePurchased(
+          tournament.id,
+          tournamentContractAddress,
+          registrationDate,
+          accountAddress
+        );
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to purchase insurance");
