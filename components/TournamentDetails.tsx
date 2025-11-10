@@ -660,68 +660,6 @@ export function TournamentDetails() {
       >
         <Card>
           <CardHeader>
-            <CardTitle>Tournament Search</CardTitle>
-            <CardDescription>
-              Enter a tournament URL to view buy-in, premium, and payout information
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                value={tournamentUrl}
-                onChange={(e) => setTournamentUrl(e.target.value)}
-                placeholder="http://localhost:8000/tournament_example.html"
-                onKeyDown={(e) => e.key === "Enter" && handleGetInfo()}
-              />
-              <Button onClick={handleGetInfo} disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Get Info"}
-              </Button>
-            </div>
-
-            {error && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-sm text-destructive"
-              >
-                {error}
-              </motion.div>
-            )}
-
-            {tournamentInfo && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-lg border bg-muted p-4 space-y-2"
-              >
-                <h4 className="font-semibold text-lg">Tournament Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Buy-in</p>
-                    <p className="text-2xl font-bold">
-                      {Number(tournamentInfo.tournament_buy_in)} tokens
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Insurance Premium</p>
-                    <p className="text-2xl font-bold">
-                      {Number(tournamentInfo.insurance_premium)} tokens
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Payout Amount</p>
-                    <p className="text-2xl font-bold">
-                      {Number(tournamentInfo.payout_amount)} tokens
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
             <CardTitle>Tournament List</CardTitle>
             <CardDescription>Browse available tournaments and view details</CardDescription>
           </CardHeader>

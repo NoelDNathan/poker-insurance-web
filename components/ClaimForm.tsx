@@ -143,22 +143,7 @@ export function ClaimForm() {
     }
   };
 
-  const handleManualClaim = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!account) {
-      setError("Please connect an account first");
-      return;
-    }
-
-    if (!policyId) {
-      setError("Please enter a policy ID");
-      return;
-    }
-
-    await handleFileClaim(policyId);
-    setPolicyId("");
-  };
+  
 
   return (
     <motion.div
@@ -278,45 +263,6 @@ export function ClaimForm() {
               )}
             </div>
           )}
-
-          {/* Manual Claim Section */}
-          <div className="border-t pt-6">
-            <h3 className="font-semibold mb-2">Manual Claim</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Enter a policy ID manually to file a claim
-            </p>
-            <form onSubmit={handleManualClaim} className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="policyId" className="text-sm font-medium">
-                  Policy ID
-                </label>
-                <Input
-                  id="policyId"
-                  value={policyId}
-                  onChange={(e) => setPolicyId(e.target.value)}
-                  placeholder="policy-001"
-                  required
-                />
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading || !account}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  "File Claim"
-                )}
-              </Button>
-
-              {!account && (
-                <p className="text-sm text-muted-foreground text-center">
-                  Please connect an account to file a claim
-                </p>
-              )}
-            </form>
-          </div>
         </CardContent>
       </Card>
     </motion.div>
