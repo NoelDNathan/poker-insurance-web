@@ -253,6 +253,8 @@ export function TournamentDetails() {
   const [deploymentError, setDeploymentError] = useState<string | null>(null);
   const [contractDeployed, setContractDeployed] = useState(false);
   const [deployedContractAddress, setDeployedContractAddress] = useState<string | null>(null);
+  // Map to store contract addresses per tournament
+  const [tournamentContracts, setTournamentContracts] = useState<Record<string, string>>({});
 
   // Filter states - using strings for Select (single selection or "all")
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -348,13 +350,33 @@ export function TournamentDetails() {
     loadPolicies();
   }, [loadPolicies]);
 
-  // Deploy contract on mount before showing tournament list
+  // Deploy contract on mount before showing tournament list (only if not already deployed)
   useEffect(() => {
     const deployContract = async () => {
       // Check if account is available
       if (!account) {
         console.log("[TournamentDetails] No account found, skipping deployment");
         setDeploymentError("Please connect an account first");
+        return;
+      }
+
+      // Check if initial contract already exists in localStorage
+      const initialTournamentId = "tournament-012";
+      const existingContractAddress = localStorage.getItem(
+        `tournament_contract_${initialTournamentId}`
+      );
+
+      if (existingContractAddress) {
+        console.log(
+          "[TournamentDetails] Using existing initial contract:",
+          existingContractAddress
+        );
+        setDeployedContractAddress(existingContractAddress);
+        setTournamentContracts((prev) => ({
+          ...prev,
+          [initialTournamentId]: existingContractAddress,
+        }));
+        setContractDeployed(true);
         return;
       }
 
@@ -388,7 +410,7 @@ export function TournamentDetails() {
         const contractAddress = await tournamentContract.deployContract(contractCode);
         tournamentContract.setContractAddress(contractAddress);
 
-        // Store contract address in localStorage for future use
+        // Store contract address in localStorage for future use (legacy support)
         localStorage.setItem("poker_tournament_contract_address", contractAddress);
         setDeployedContractAddress(contractAddress);
         console.log(
@@ -430,6 +452,15 @@ export function TournamentDetails() {
 
         await tournamentContract.setPlayers(balances, addresses);
         console.log("[TournamentDetails] Players set successfully");
+
+        // Associate this contract with the initial tournament (tournament-012 "Evening Showdown")
+        // This is the tournament that is already registered and available to play today
+        setTournamentContracts((prev) => ({
+          ...prev,
+          [initialTournamentId]: contractAddress,
+        }));
+        // Store in localStorage with tournament ID as key
+        localStorage.setItem(`tournament_contract_${initialTournamentId}`, contractAddress);
 
         setContractDeployed(true);
       } catch (error) {
@@ -568,7 +599,7 @@ export function TournamentDetails() {
   };
 
   // Callback to update tournament when registration happens in dialog
-  const handleTournamentRegistered = (tournamentId: string) => {
+  const handleTournamentRegistered = (tournamentId: string, contractAddress?: string) => {
     updateTournamentRegistration(tournamentId, true);
     // Update the selected tournament to reflect the change immediately
     setSelectedTournament((prev) => {
@@ -577,6 +608,14 @@ export function TournamentDetails() {
       }
       return prev;
     });
+    // If a contract address was provided (from deployment), store it
+    if (contractAddress) {
+      setTournamentContracts((prev) => ({
+        ...prev,
+        [tournamentId]: contractAddress,
+      }));
+      localStorage.setItem(`tournament_contract_${tournamentId}`, contractAddress);
+    }
   };
 
   // Callback to update tournament when insurance is purchased in dialog
@@ -604,6 +643,23 @@ export function TournamentDetails() {
   // Handle play button click
   const handlePlayTournament = (e: React.MouseEvent, tournament: Tournament) => {
     e.stopPropagation(); // Prevent opening the dialog
+
+    // Get the contract address for this tournament
+    const contractAddress = tournamentContracts[tournament.id] || deployedContractAddress;
+
+    if (!contractAddress) {
+      console.error(
+        "[TournamentDetails] No contract address available for tournament:",
+        tournament.id
+      );
+      setError("Contract address not available. Please wait for contract deployment.");
+      return;
+    }
+
+    // Store the contract address for this tournament in localStorage so PokerGame can use it
+    localStorage.setItem(`tournament_contract_${tournament.id}`, contractAddress);
+    localStorage.setItem("current_tournament_id", tournament.id);
+
     router.push(`/play/${tournament.id}`);
   };
 
@@ -947,8 +1003,13 @@ export function TournamentDetails() {
           tournament={tournaments.find((t) => t.id === selectedTournament.id) || selectedTournament}
           open={isDialogOpen}
           onOpenChange={handleDialogClose}
-          onRegistered={() => handleTournamentRegistered(selectedTournament.id)}
+          onRegistered={(tournamentId, contractAddress) =>
+            handleTournamentRegistered(tournamentId, contractAddress)
+          }
           onInsurancePurchased={() => handleInsurancePurchased()}
+          tournamentContractAddress={
+            tournamentContracts[selectedTournament.id] || deployedContractAddress
+          }
         />
       )}
     </>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,9 +12,12 @@ import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
 export function PurchaseForm() {
   const { account, accountAddress, subtractBalance } = useAccount();
-  const [tournamentId, setTournamentId] = useState("");
-  const [tournamentUrl, setTournamentUrl] = useState("");
-  const [playerId, setPlayerId] = useState("");
+  // Try to get deployed contract address from localStorage
+  const defaultTournamentAddress =
+    typeof window !== "undefined"
+      ? localStorage.getItem("poker_tournament_contract_address") || ""
+      : "";
+  const [tournamentAddress, setTournamentAddress] = useState(defaultTournamentAddress);
   const [registrationDate, setRegistrationDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [tournamentInfo, setTournamentInfo] = useState<any>(null);
@@ -25,9 +28,17 @@ export function PurchaseForm() {
   const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
   const studioUrl = process.env.NEXT_PUBLIC_STUDIO_URL;
 
+  // Update tournament address when localStorage changes
+  useEffect(() => {
+    const storedAddress = localStorage.getItem("poker_tournament_contract_address");
+    if (storedAddress && !tournamentAddress) {
+      setTournamentAddress(storedAddress);
+    }
+  }, [tournamentAddress]);
+
   const handleGetTournamentInfo = async () => {
-    if (!tournamentUrl) {
-      setError("Please enter a tournament URL");
+    if (!tournamentAddress) {
+      setError("Please enter a tournament contract address");
       return;
     }
 
@@ -36,9 +47,9 @@ export function PurchaseForm() {
     setTournamentInfo(null);
 
     try {
-      const contract = new PokerCoolerInsurance(contractAddress, account, studioUrl);
-      const info = await contract.getTournamentInfo(tournamentUrl);
-      setTournamentInfo(info);
+      // Note: getTournamentInfo might need to be updated to work with contract address
+      // For now, we'll skip this or implement a different method
+      setError("Tournament info lookup by address not yet implemented");
     } catch (err: any) {
       setError(err.message || "Failed to fetch tournament information");
     } finally {
@@ -55,12 +66,14 @@ export function PurchaseForm() {
     }
 
     if (!contractAddress || contractAddress.trim() === "") {
-      setError("Contract address is not configured. Please set NEXT_PUBLIC_CONTRACT_ADDRESS in your .env.local file.");
+      setError(
+        "Contract address is not configured. Please set NEXT_PUBLIC_CONTRACT_ADDRESS in your .env.local file."
+      );
       return;
     }
 
-    if (!tournamentId || !tournamentUrl || !playerId || !registrationDate) {
-      setError("Please fill in all fields");
+    if (!tournamentAddress || !registrationDate || !accountAddress) {
+      setError("Please fill in all fields and ensure account is connected");
       return;
     }
 
@@ -71,21 +84,18 @@ export function PurchaseForm() {
     try {
       const contract = new PokerCoolerInsurance(contractAddress, account, studioUrl);
       const txHash = await contract.purchaseInsurance(
-        tournamentId,
-        tournamentUrl,
-        playerId,
-        registrationDate
+        tournamentAddress,
+        registrationDate,
+        accountAddress
       );
-      // Subtract premium from balance
+      // Subtract premium from balance (if tournamentInfo is available)
       const premium = tournamentInfo ? Number(tournamentInfo.insurance_premium) : 0;
       if (premium > 0) {
         subtractBalance(premium);
       }
-      setSuccess(`Insurance purchased successfully! ${premium} tokens deducted. Transaction: ${txHash}`);
+      setSuccess(`Insurance purchased successfully! Transaction: ${txHash}`);
       // Reset form
-      setTournamentId("");
-      setTournamentUrl("");
-      setPlayerId("");
+      setTournamentAddress(defaultTournamentAddress);
       setRegistrationDate("");
       setTournamentInfo(null);
     } catch (err: any) {
@@ -104,84 +114,26 @@ export function PurchaseForm() {
       <Card>
         <CardHeader>
           <CardTitle>Purchase Insurance</CardTitle>
-          <CardDescription>
-            Enter tournament details to purchase cooler insurance
-          </CardDescription>
+          <CardDescription>Enter tournament details to purchase cooler insurance</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handlePurchase} className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="tournamentId" className="text-sm font-medium">
-                Tournament ID
+              <label htmlFor="tournamentAddress" className="text-sm font-medium">
+                Tournament Contract Address
               </label>
               <Input
-                id="tournamentId"
-                value={tournamentId}
-                onChange={(e) => setTournamentId(e.target.value)}
-                placeholder="tournament123"
+                id="tournamentAddress"
+                value={tournamentAddress}
+                onChange={(e) => setTournamentAddress(e.target.value)}
+                placeholder="0x..."
                 required
               />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="tournamentUrl" className="text-sm font-medium">
-                Tournament URL
-              </label>
-              <div className="flex gap-2">
-                <Input
-                  id="tournamentUrl"
-                  value={tournamentUrl}
-                  onChange={(e) => setTournamentUrl(e.target.value)}
-                  placeholder="http://localhost:8000/tournament_example.html"
-                  required
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleGetTournamentInfo}
-                  disabled={loadingInfo}
-                >
-                  {loadingInfo ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Get Info"
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            {tournamentInfo && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                className="rounded-lg border bg-muted p-4"
-              >
-                <h4 className="font-semibold mb-2">Tournament Information</h4>
-                <div className="space-y-1 text-sm">
-                  <p>
-                    <strong>Buy-in:</strong> {Number(tournamentInfo.tournament_buy_in)} tokens
-                  </p>
-                  <p>
-                    <strong>Premium:</strong> {Number(tournamentInfo.insurance_premium)} tokens
-                  </p>
-                  <p>
-                    <strong>Payout:</strong> {Number(tournamentInfo.payout_amount)} tokens
-                  </p>
-                </div>
-              </motion.div>
-            )}
-
-            <div className="space-y-2">
-              <label htmlFor="playerId" className="text-sm font-medium">
-                Player ID
-              </label>
-              <Input
-                id="playerId"
-                value={playerId}
-                onChange={(e) => setPlayerId(e.target.value)}
-                placeholder="player123"
-                required
-              />
+              {defaultTournamentAddress && (
+                <p className="text-xs text-muted-foreground">
+                  Using deployed contract address from localStorage
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -197,11 +149,16 @@ export function PurchaseForm() {
               />
             </div>
 
+            {accountAddress && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Player Address</label>
+                <Input value={accountAddress} disabled className="bg-muted" />
+                <p className="text-xs text-muted-foreground">Using connected account address</p>
+              </div>
+            )}
+
             {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
                 <Alert variant="destructive">
                   <XCircle className="h-4 w-4" />
                   <AlertTitle>Error</AlertTitle>
@@ -211,10 +168,7 @@ export function PurchaseForm() {
             )}
 
             {success && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-              >
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
                 <Alert>
                   <CheckCircle2 className="h-4 w-4" />
                   <AlertTitle>Success</AlertTitle>
@@ -245,7 +199,3 @@ export function PurchaseForm() {
     </motion.div>
   );
 }
-
-
-
-

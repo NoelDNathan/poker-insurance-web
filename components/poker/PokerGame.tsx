@@ -46,80 +46,49 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
   const [lastWinnerIndex, setLastWinnerIndex] = useState<number | null>(null);
   const studioUrl = process.env.NEXT_PUBLIC_STUDIO_URL;
 
-  // Deploy contract and set players on mount
+  // Initialize contract from localStorage (no deployment)
   useEffect(() => {
     const initializeContract = async () => {
-      console.log("[PokerGame] Initializing contract...");
+      console.log("[PokerGame] Initializing contract for tournament:", tournamentId);
       if (!account) {
         console.log("[PokerGame] No account found, aborting initialization");
         setDeploymentError("Please connect an account first");
         return;
       }
 
-      console.log("[PokerGame] Account found, starting deployment process");
       setIsDeploying(true);
       setDeploymentError(null);
 
       try {
-        // Fetch contract code from API
-        console.log("[PokerGame] Fetching contract code from API...");
-        const response = await fetch("/api/contract");
-        if (!response.ok) {
-          throw new Error("Failed to fetch contract code");
-        }
-        const { code } = await response.json();
-        console.log("[PokerGame] Contract code fetched, converting to Uint8Array...");
-        // Convert base64 to Uint8Array
-        const binaryString = atob(code);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const contractCode = bytes;
-        console.log("[PokerGame] Contract code ready, size:", contractCode.length, "bytes");
+        // Get contract address from localStorage for this tournament
+        const contractAddress = localStorage.getItem(`tournament_contract_${tournamentId}`);
 
-        // Deploy contract
-        console.log("[PokerGame] Creating PokerTournament instance...");
-        const tournamentContract = new PokerTournament(null, account, studioUrl);
-        console.log("[PokerGame] Deploying contract...");
-        const contractAddress = await tournamentContract.deployContract(contractCode);
-        tournamentContract.setContractAddress(contractAddress);
+        if (!contractAddress) {
+          throw new Error(
+            `No contract address found for tournament ${tournamentId}. Please register for the tournament first.`
+          );
+        }
+
+        console.log("[PokerGame] Using existing contract address:", contractAddress);
+
+        // Create PokerTournament instance with existing contract address
+        const tournamentContract = new PokerTournament(contractAddress, account, studioUrl);
         setContract(tournamentContract);
-        console.log("[PokerGame] Contract deployed, address:", contractAddress);
+        console.log("[PokerGame] Contract initialized with address:", contractAddress);
 
-        // Generate bot addresses (2 bots)
-        console.log("[PokerGame] Generating bot addresses...");
+        // Get state to verify contract is working
+        const state = await tournamentContract.getState();
+        console.log("[PokerGame] Contract state retrieved:", state);
+
+        // Generate bot addresses (2 bots) - these should match the ones set during deployment
         const botAddresses = Array.from({ length: 2 }, () => generateRandomAddress());
         botAddressesRef.current = botAddresses;
         console.log("[PokerGame] Bot addresses generated:", botAddresses.length);
 
-        // Get user address - try to get from account
-        let userAddress = accountAddress || "";
-        if (!userAddress && account) {
-          // Try to get address from account object
-          const accountAny = account as any;
-          if (accountAny.address) {
-            userAddress =
-              typeof accountAny.address === "string" ? accountAny.address : accountAny.address();
-          }
-        }
-
-        if (!userAddress) {
-          throw new Error("Could not get user address from account");
-        }
-        console.log("[PokerGame] User address:", userAddress);
-
-        // Set players: 3 players with balance 1000 each
-        const balances = Array(3).fill(1000);
-        const addresses = [userAddress, ...botAddresses];
-        console.log("[PokerGame] Setting players:", { playerCount: 3, balancePerPlayer: 1000 });
-
-        await tournamentContract.setPlayers(balances, addresses);
-        console.log("[PokerGame] Players set successfully, contract initialization complete");
         setContractDeployed(true);
       } catch (error: any) {
         console.error("Error initializing contract:", error);
-        setDeploymentError(error.message || "Failed to deploy contract");
+        setDeploymentError(error.message || "Failed to initialize contract");
       } finally {
         setIsDeploying(false);
       }
@@ -127,7 +96,7 @@ export const PokerGame: React.FC<PokerGameProps> = ({ tournamentId, gameMode }) 
 
     initializeContract();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account]);
+  }, [account, tournamentId]);
 
   useEffect(() => {
     if (!contractDeployed) {

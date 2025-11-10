@@ -14,6 +14,8 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { PokerCoolerInsurance } from "@/lib/PokerCoolerInsurance";
+import { PokerTournament } from "@/lib/PokerTournament";
+import { generateRandomAddress } from "@/lib/utils";
 import { useAccount } from "@/lib/AccountContext";
 import { Tournament } from "./TournamentDetails";
 import {
@@ -31,8 +33,9 @@ interface TournamentDialogProps {
   tournament: Tournament;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onRegistered?: (tournamentId: string) => void;
+  onRegistered?: (tournamentId: string, contractAddress?: string) => void;
   onInsurancePurchased?: (tournamentId: string) => void;
+  tournamentContractAddress?: string | null;
 }
 
 export function TournamentDialog({
@@ -41,6 +44,7 @@ export function TournamentDialog({
   onOpenChange,
   onRegistered,
   onInsurancePurchased,
+  tournamentContractAddress,
 }: TournamentDialogProps) {
   const { account, accountAddress, subtractBalance } = useAccount();
   const [error, setError] = useState<string | null>(null);
@@ -95,16 +99,69 @@ export function TournamentDialog({
     setSuccess(null);
 
     try {
-      // Simulate registration - in a real app, this would call a registration API
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      let contractAddress = tournamentContractAddress;
+
+      // If tournament doesn't have a contract yet, deploy a new one
+      if (!contractAddress) {
+        console.log("[TournamentDialog] Deploying new contract for tournament:", tournament.id);
+
+        // Fetch contract code from API
+        const response = await fetch("/api/contract");
+        if (!response.ok) {
+          throw new Error("Failed to fetch contract code");
+        }
+        const { code } = await response.json();
+
+        // Convert base64 to Uint8Array
+        const binaryString = atob(code);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const contractCode = bytes;
+
+        // Deploy contract
+        const tournamentContract = new PokerTournament(null, account, studioUrl);
+        contractAddress = await tournamentContract.deployContract(contractCode);
+        tournamentContract.setContractAddress(contractAddress);
+
+        console.log(
+          "[TournamentDialog] Contract deployed for tournament:",
+          tournament.id,
+          "at address:",
+          contractAddress
+        );
+
+        // Set players after deployment
+        const botAddresses = Array.from({ length: 2 }, () => generateRandomAddress());
+        let userAddress = accountAddress || "";
+        if (!userAddress && account) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const accountAny = account as any;
+          if (accountAny.address) {
+            userAddress =
+              typeof accountAny.address === "string" ? accountAny.address : accountAny.address();
+          }
+        }
+
+        if (!userAddress) {
+          throw new Error("Could not get user address from account");
+        }
+
+        const balances = Array(3).fill(1000);
+        const addresses = [userAddress, ...botAddresses];
+        await tournamentContract.setPlayers(balances, addresses);
+        console.log("[TournamentDialog] Players set for tournament:", tournament.id);
+      }
+
       // Subtract buy-in from balance
       subtractBalance(tournament.buyIn);
       setSuccess(
         `Successfully registered for the tournament! ${tournament.buyIn} tokens deducted.`
       );
-      // Notify parent component to update tournament registration status
+      // Notify parent component to update tournament registration status and pass contract address
       if (onRegistered) {
-        onRegistered(tournament.id);
+        onRegistered(tournament.id, contractAddress || undefined);
       }
       // Show insurance prompt dialog
       setShowInsurancePrompt(true);
@@ -121,21 +178,26 @@ export function TournamentDialog({
       return;
     }
 
+    if (!tournamentContractAddress) {
+      setError(
+        "Tournament contract address is not available. Please wait for contract deployment."
+      );
+      return;
+    }
+
     setIsPurchasingInsurance(true);
     setError(null);
     setSuccess(null);
 
     try {
       // Generate automatic values
-      const playerId = getAutoPlayerId();
       const registrationDate = getAutoRegistrationDate();
 
       const contract = new PokerCoolerInsurance(contractAddress, account, studioUrl);
       const txHash = await contract.purchaseInsurance(
-        tournament.id,
-        tournament.tournamentUrl,
-        playerId,
-        registrationDate
+        tournamentContractAddress,
+        registrationDate,
+        accountAddress
       );
       // Subtract premium from balance
       subtractBalance(tournament.premium);

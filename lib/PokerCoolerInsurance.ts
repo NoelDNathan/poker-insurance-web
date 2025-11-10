@@ -55,16 +55,15 @@ export class PokerCoolerInsurance {
   }
 
   async purchaseInsurance(
-    tournamentId: string,
-    tournamentUrl: string,
-    playerId: string,
-    registrationDate: string
+    tournamentAddress: string,
+    registrationDate: string,
+    playerAddress: string
   ): Promise<string> {
     const client = this.getClient();
     const txHash = await client.writeContract({
       address: this.contractAddress as Address,
       functionName: "purchase_insurance",
-      args: [tournamentId, tournamentUrl, playerId, registrationDate],
+      args: [tournamentAddress, registrationDate, playerAddress],
       value: BigInt(0),
     });
     const receipt = await client.waitForTransactionReceipt({
