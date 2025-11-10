@@ -255,6 +255,8 @@ export function TournamentDetails() {
   const [deployedContractAddress, setDeployedContractAddress] = useState<string | null>(null);
   // Map to store contract addresses per tournament
   const [tournamentContracts, setTournamentContracts] = useState<Record<string, string>>({});
+  // Map to store insurance status per tournament
+  const [hasInsuranceMap, setHasInsuranceMap] = useState<Record<string, boolean>>({});
 
   // Filter states - using strings for Select (single selection or "all")
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -318,9 +320,36 @@ export function TournamentDetails() {
     [tournaments]
   );
 
+  // Update insurance map based on policies
+  const updateInsuranceMap = useCallback(
+    (currentPolicies: Record<string, InsurancePolicy>, preserveManualUpdates = false) => {
+      setHasInsuranceMap((prevMap) => {
+        const newInsuranceMap: Record<string, boolean> = {};
+
+        // Check each tournament for insurance
+        tournaments.forEach((tournament) => {
+          const hasInsurance = Object.values(currentPolicies).some(
+            (policy) => policy.tournament_id === tournament.id
+          );
+          // If preserveManualUpdates is true and we have a manual update, keep it
+          if (preserveManualUpdates && prevMap[tournament.id] === true && !hasInsurance) {
+            newInsuranceMap[tournament.id] = true;
+          } else {
+            newInsuranceMap[tournament.id] = hasInsurance;
+          }
+        });
+
+        return newInsuranceMap;
+      });
+    },
+    [tournaments]
+  );
+
   const loadPolicies = useCallback(async () => {
     setLoadingPolicies(true);
     try {
+      let loadedPolicies: Record<string, InsurancePolicy>;
+
       if (account && accountAddress) {
         // Try to load real policies
         const contract = new PokerCoolerInsurance(contractAddress, account, studioUrl);
@@ -328,23 +357,37 @@ export function TournamentDetails() {
 
         // If there are real policies, use them; otherwise use mock policies
         if (Object.keys(playerPolicies).length > 0) {
-          setPolicies(playerPolicies);
+          loadedPolicies = playerPolicies;
         } else {
           // No real policies, use default mock policies
-          setPolicies(getDefaultMockPolicies(accountAddress));
+          loadedPolicies = getDefaultMockPolicies(accountAddress);
         }
       } else {
         // No account connected, use default mock policies for demo
-        setPolicies(getDefaultMockPolicies(null));
+        loadedPolicies = getDefaultMockPolicies(null);
       }
+
+      setPolicies(loadedPolicies);
+      // Update insurance map after loading policies
+      // Preserve manual updates when reloading (e.g., after purchasing insurance)
+      updateInsuranceMap(loadedPolicies, true);
     } catch (err: unknown) {
       console.error("Failed to load policies:", err);
       // On error, use default mock policies
-      setPolicies(getDefaultMockPolicies(accountAddress));
+      const mockPolicies = getDefaultMockPolicies(accountAddress);
+      setPolicies(mockPolicies);
+      updateInsuranceMap(mockPolicies, true);
     } finally {
       setLoadingPolicies(false);
     }
-  }, [account, accountAddress, contractAddress, studioUrl, getDefaultMockPolicies]);
+  }, [
+    account,
+    accountAddress,
+    contractAddress,
+    studioUrl,
+    getDefaultMockPolicies,
+    updateInsuranceMap,
+  ]);
 
   useEffect(() => {
     loadPolicies();
@@ -485,15 +528,6 @@ export function TournamentDetails() {
     );
   };
 
-  const hasInsuranceForTournament = (tournament: Tournament): boolean => {
-    if (!policies || Object.keys(policies).length === 0) return false;
-
-    // Only check by tournament_id since all tournaments share the same URL
-    return Object.values(policies).some((policy) => {
-      return policy.tournament_id === tournament.id;
-    });
-  };
-
   const getClaimablePolicyForTournament = (tournament: Tournament): InsurancePolicy | null => {
     if (!policies || Object.keys(policies).length === 0) return null;
 
@@ -590,9 +624,10 @@ export function TournamentDetails() {
 
   const handleDialogClose = (open: boolean) => {
     setIsDialogOpen(open);
-    // Reload policies when dialog closes in case insurance was purchased
+    // Reset selected tournament when closing
     if (!open) {
-      loadPolicies();
+      // Don't reload policies immediately - let handleInsurancePurchased handle it
+      // This prevents overwriting the insurance state if it was just purchased
       // Reset selected tournament
       setSelectedTournament(null);
     }
@@ -619,10 +654,18 @@ export function TournamentDetails() {
   };
 
   // Callback to update tournament when insurance is purchased in dialog
-  const handleInsurancePurchased = () => {
-    // Reload policies to get the new insurance
-    loadPolicies();
-    // The UI will automatically update because hasInsuranceForTournament checks policies
+  const handleInsurancePurchased = async (tournamentId: string) => {
+    // Update insurance map immediately for the specific tournament
+    setHasInsuranceMap((prev) => ({
+      ...prev,
+      [tournamentId]: true,
+    }));
+
+    // Wait a bit for the transaction to be confirmed, then reload policies
+    // This gives the blockchain time to process the transaction
+    setTimeout(async () => {
+      await loadPolicies();
+    }, 2000); // Wait 2 seconds before reloading
   };
 
   const formatDate = (dateString: string) => {
@@ -693,7 +736,7 @@ export function TournamentDetails() {
       if (!tournament.isRegistered && !showNotRegistered) return false;
 
       // Filter by insurance status
-      const hasInsurance = hasInsuranceForTournament(tournament);
+      const hasInsurance = hasInsuranceMap[tournament.id] || false;
       if (hasInsurance && !showInsured) return false;
       if (!hasInsurance && !showNotInsured) return false;
 
@@ -863,7 +906,7 @@ export function TournamentDetails() {
                                 <Badge variant={tournament.isRegistered ? "default" : "outline"}>
                                   {tournament.isRegistered ? "Registered" : "Not Registered"}
                                 </Badge>
-                                {hasInsuranceForTournament(tournament) && (
+                                {hasInsuranceMap[tournament.id] && (
                                   <Badge
                                     variant="default"
                                     className="bg-green-600 hover:bg-green-700"
@@ -875,7 +918,7 @@ export function TournamentDetails() {
                                 {claimablePolicy && (
                                   <Badge
                                     variant="default"
-                                    className="bg-orange-600 hover:bg-orange-700"
+                                    className="bg-orange-300 hover:bg-orange-400"
                                   >
                                     <CheckCircle2 className="h-3 w-3 mr-1" />
                                     Claimable
@@ -886,7 +929,7 @@ export function TournamentDetails() {
                                   tournament.isRegistered && (
                                     <Badge
                                       variant="default"
-                                      className="bg-blue-600 hover:bg-blue-700"
+                                      className="bg-blue-600 hover:bg-blue-700 text-white"
                                     >
                                       <Play className="h-3 w-3 mr-1" />
                                       Play Today
@@ -1006,10 +1049,11 @@ export function TournamentDetails() {
           onRegistered={(tournamentId, contractAddress) =>
             handleTournamentRegistered(tournamentId, contractAddress)
           }
-          onInsurancePurchased={() => handleInsurancePurchased()}
+          onInsurancePurchased={(tournamentId) => handleInsurancePurchased(tournamentId)}
           tournamentContractAddress={
             tournamentContracts[selectedTournament.id] || deployedContractAddress
           }
+          hasInsurance={hasInsuranceMap[selectedTournament.id] || false}
         />
       )}
     </>

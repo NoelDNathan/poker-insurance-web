@@ -12,10 +12,10 @@ export default function TournamentPage() {
       </div>
 
       <TournamentDetails />
-
+{/* 
       <div className="grid md:grid-cols-1 gap-8">
         <ClaimForm />
-      </div>
+      </div> */}
     </div>
   );
 }

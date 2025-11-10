@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +36,7 @@ interface TournamentDialogProps {
   onRegistered?: (tournamentId: string, contractAddress?: string) => void;
   onInsurancePurchased?: (tournamentId: string) => void;
   tournamentContractAddress?: string | null;
+  hasInsurance?: boolean;
 }
 
 export function TournamentDialog({
@@ -45,6 +46,7 @@ export function TournamentDialog({
   onRegistered,
   onInsurancePurchased,
   tournamentContractAddress,
+  hasInsurance: hasInsuranceProp,
 }: TournamentDialogProps) {
   const { account, accountAddress, subtractBalance } = useAccount();
   const [error, setError] = useState<string | null>(null);
@@ -52,9 +54,49 @@ export function TournamentDialog({
   const [isRegistering, setIsRegistering] = useState(false);
   const [isPurchasingInsurance, setIsPurchasingInsurance] = useState(false);
   const [showInsurancePrompt, setShowInsurancePrompt] = useState(false);
+  const [hasInsurance, setHasInsurance] = useState(hasInsuranceProp || false);
 
   const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
   const studioUrl = process.env.NEXT_PUBLIC_STUDIO_URL;
+
+  // Sync with prop from parent component
+  useEffect(() => {
+    if (hasInsuranceProp !== undefined) {
+      setHasInsurance(hasInsuranceProp);
+    }
+  }, [hasInsuranceProp]);
+
+  // Check if insurance is already purchased for this tournament (fallback if prop not provided)
+  useEffect(() => {
+    const checkInsurance = async () => {
+      // If prop is provided, use it instead of checking
+      if (hasInsuranceProp !== undefined) {
+        return;
+      }
+
+      if (!account || !accountAddress || !open) {
+        setHasInsurance(false);
+        return;
+      }
+
+      try {
+        const contract = new PokerCoolerInsurance(contractAddress, account, studioUrl);
+        const policies = await contract.getPlayerPolicies(accountAddress);
+
+        // Check if there's a policy for this tournament
+        const hasPolicy = Object.values(policies).some(
+          (policy) => policy.tournament_id === tournament.id
+        );
+
+        setHasInsurance(hasPolicy);
+      } catch (err) {
+        console.error("Error checking insurance:", err);
+        setHasInsurance(false);
+      }
+    };
+
+    checkInsurance();
+  }, [account, accountAddress, open, tournament.id, contractAddress, studioUrl, hasInsuranceProp]);
 
   // Generate automatic values for insurance purchase
   const getAutoPlayerId = (): string => {
@@ -201,11 +243,16 @@ export function TournamentDialog({
       );
       // Subtract premium from balance
       subtractBalance(tournament.premium);
-      setSuccess(
-        `Insurance purchased successfully! ${tournament.premium} tokens deducted. Transaction: ${txHash}`
-      );
+
+      // Update local state to show insurance is purchased
+      setHasInsurance(true);
+
+      // Clear success message after showing insurance purchased state
+      setSuccess(null);
+
       // Close insurance prompt dialog
       setShowInsurancePrompt(false);
+
       // Notify parent component to reload policies
       if (onInsurancePurchased) {
         onInsurancePurchased(tournament.id);
@@ -412,45 +459,59 @@ export function TournamentDialog({
                   <Shield className="h-5 w-5" />
                   <h3 className="font-semibold text-lg">Cooler Insurance</h3>
                 </div>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Protect yourself against cooler eliminations. If you get eliminated by a cooler,
-                  you&apos;ll receive {tournament.payout} tokens as compensation.
-                </p>
 
-                {!account && (
+                {hasInsurance ? (
                   <Alert>
-                    <XCircle className="h-4 w-4" />
-                    <AlertTitle>Account Required</AlertTitle>
+                    <Shield className="h-4 w-4" />
+                    <AlertTitle>Insurance Already Purchased</AlertTitle>
                     <AlertDescription>
-                      Please connect an account to purchase insurance
+                      You have already purchased insurance for this tournament. You will be able to
+                      file a claim after playing the tournament if you are eliminated by a cooler.
                     </AlertDescription>
                   </Alert>
-                )}
-
-                {account && (
-                  <div className="space-y-4">
-                    <Button
-                      onClick={handlePurchaseInsurance}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                      disabled={isPurchasingInsurance || !accountAddress}
-                    >
-                      {isPurchasingInsurance ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <Shield className="mr-2 h-4 w-4" />
-                          Purchase Insurance ({tournament.premium} tokens)
-                        </>
-                      )}
-                    </Button>
-                    <p className="text-xs text-muted-foreground text-center">
-                      Player ID and registration date will be automatically generated from your
-                      account
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Protect yourself against cooler eliminations. If you get eliminated by a
+                      cooler, you&apos;ll receive {tournament.payout} tokens as compensation.
                     </p>
-                  </div>
+
+                    {!account && (
+                      <Alert>
+                        <XCircle className="h-4 w-4" />
+                        <AlertTitle>Account Required</AlertTitle>
+                        <AlertDescription>
+                          Please connect an account to purchase insurance
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {account && (
+                      <div className="space-y-4">
+                        <Button
+                          onClick={handlePurchaseInsurance}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                          disabled={isPurchasingInsurance || !accountAddress}
+                        >
+                          {isPurchasingInsurance ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <Shield className="mr-2 h-4 w-4" />
+                              Purchase Insurance ({tournament.premium} tokens)
+                            </>
+                          )}
+                        </Button>
+                        <p className="text-xs text-muted-foreground text-center">
+                          Player ID and registration date will be automatically generated from your
+                          account
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
