@@ -230,7 +230,7 @@ app-nextjs/
 ├── package.json            # Node dependencies
 ├── requirements.txt        # Python dependencies
 └── tsconfig.json           # TypeScript config
-```****
+```
 
 ### Environment Variables
 
