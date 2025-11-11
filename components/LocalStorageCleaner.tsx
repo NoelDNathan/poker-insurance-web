@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 
 const STORAGE_START_TIME_KEY = "localStorage_startTime";
-const CLEANUP_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes in milliseconds
+const CLEANUP_INTERVAL_MS = 15 * 60 * 1000; // 10 minutes in milliseconds
 const CHECK_INTERVAL_MS = 30 * 1000; // Check every 30 seconds
 
 export function LocalStorageCleaner() {
@@ -47,4 +47,5 @@ export function LocalStorageCleaner() {
   // This component doesn't render anything
   return null;
 }
+
 

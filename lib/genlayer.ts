@@ -31,7 +31,6 @@ export function getClient(account: Account | null = null, studioUrl?: string) {
   const config: any = {
     chain: studionet,
     ...(account ? { account } : {}),
-    ...(studioUrl ? { endpoint: studioUrl } : {}),
   };
   
   // Ensure account is properly set if provided
