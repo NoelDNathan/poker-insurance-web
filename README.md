@@ -234,13 +234,13 @@ app-nextjs/
 
 ### Environment Variables
 
-**Frontend** (`.env.local`):
+**Environment Variables** (`.env.local`):
 ```env
 NEXT_PUBLIC_CONTRACT_ADDRESS=0x...
 NEXT_PUBLIC_STUDIO_URL=https://studio.genlayer.com
 ```
 
-**Backend/Config** (`config/genlayer_config.py`):
+**Config** (`config/genlayer_config.py`):
 ```python
 RPCPROTOCOL=http
 RPCHOST=localhost
