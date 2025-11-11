@@ -230,12 +230,12 @@ app-nextjs/
 ├── package.json            # Node dependencies
 ├── requirements.txt        # Python dependencies
 └── tsconfig.json           # TypeScript config
-```
+```****
 
 ### Environment Variables
 
 **Environment Variables** (`.env.local`):
-```env
+```**env**
 NEXT_PUBLIC_CONTRACT_ADDRESS=0x...
 NEXT_PUBLIC_STUDIO_URL=https://studio.genlayer.com
 ```
